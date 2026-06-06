@@ -35,12 +35,15 @@ Coined here; the underlying limits are *context decay* and *amnesia* (nothing su
 session but what is written to a file).
 _Avoid_: context window (a capacity; the Smart Zone is a quality-of-attention span within it)
 
-### Phase 1 — Project Setup (project-level, once per project or feature)
+### Phase 1 — Project Setup (project-level)
 
-The one-time, project-level work done before per-ticket coding begins. Two parts:
-**Alignment** establishes shared language and records the decisions that shape the work;
-**Strategic Planning** crystallises that intent into a PRD and tickets. Both run once per
-project or feature — distinct from the per-ticket work of Phase 2.
+The project-level work done before per-ticket coding begins. Two parts on **different
+cadences**: **Alignment** establishes shared language and records the decisions that shape
+the work — run in full at a project's birth, then **re-entered whenever new terms surface**
+(ongoing); **Strategic Planning** crystallises intent into a PRD and tickets — **once per
+feature**. In steady state a feature enters Phase 1 through Strategic Planning, not
+Alignment; Strategic Planning is what notices new language and reopens Alignment. Distinct
+from the per-ticket work of Phase 2.
 
 **Ubiquitous Language**:
 The single language shared by domain expert, developer, and code to describe the system.
@@ -68,30 +71,41 @@ _Avoid_: design doc, RFC, PRD
 
 **Strategic Planning**:
 The project-level planning stage: brain dump → clarifying questions → PRD → tickets. Runs
-once per project or feature and *outputs* the tickets that Phase 2 consumes. Distinct from
-PIV's Plan step, which is ticket-level and runs once per ticket. Term: Cole Medin.
+**once per feature** and *outputs* the tickets that Phase 2 consumes. Its brain-dump step
+carries an **Alignment checkpoint**: a newly surfaced term is captured into `CONTEXT.md`
+inline, and only a cluster of conflicting terms escalates — via a handoff to a fresh
+session — to a full grill-with-docs Alignment pass. Distinct from PIV's Plan step, which is
+ticket-level and runs once per ticket. Term: Cole Medin.
 _Avoid_: conflating with PIV's Plan — Strategic Planning is project-level and produces
 tickets; PIV's Plan is ticket-level and consumes one.
 
 **PM agent**:
-An agent playing the product-manager role: it helps turn discussion — including
-requirements gathered from a non-technical stakeholder — into a PRD and tickets during
-Strategic Planning. It stands in for the human PM this project does not have.
-_Avoid_: planner, architect (those name other roles/steps)
+The product-manager *role*, played by the main session adopting a PM persona (the
+`strategic-planning` skill) — **not** a Claude Code sub-agent. It turns discussion,
+including requirements gathered from a non-technical stakeholder, into a PRD and Tickets
+during Strategic Planning, standing in for the human PM this project does not have. It runs
+in the main session because the work is an interactive brain dump → clarifying-questions
+dialogue, which a separate-context, summary-returning sub-agent cannot hold (see ADR-0006).
+_Avoid_: sub-agent (runs in its own context, can't conduct the interactive dialogue);
+planner, architect (those name other roles/steps)
 
 **Ticket**:
 One independently-grabbable unit of work — the output of Strategic Planning and the input
 to one pass of the PIV Loop. Tickets are the bridge across the two phases: Phase 1 produces
-them, Phase 2 consumes them one at a time. The "user story" inside a ticket is a field of
-its content, not another name for it.
+them, Phase 2 consumes them one at a time. Each Ticket is **one file** at
+`.agents/tickets/{NN}-{slug}.md` — the disk unit equals the work unit, so `/plan` consumes
+exactly one; ordering and dependencies live in each file's frontmatter (`blocked_by: […]`),
+with no separate index. The "user story" inside a ticket is a field of its content, not
+another name for it.
 _Avoid_: issue (binds to a specific tracker), story / user story (Scrum baggage, and names
 a field of the ticket, not the ticket)
 
 **PRD** (Product Requirements Document):
 The document that says *what* to build and why for one feature — the output of Strategic
-Planning. One PRD per feature; it decomposes into phases, each phase into tickets. It is
-superseded as intent changes. (The "phase" inside a PRD is internal structure, not a
-glossary term.) Not an ADR — see that entry for the boundary.
+Planning, written to `.agents/prds/{name}.prd.md`. One PRD per feature; it decomposes into
+phases, each phase into tickets. It is superseded as intent changes. (The "phase" inside a
+PRD is internal structure, not a glossary term.) Not an ADR — see that entry for the
+boundary.
 _Avoid_: spec, requirements doc, design doc
 
 **handoff**:
