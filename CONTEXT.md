@@ -72,8 +72,8 @@ _Avoid_: design doc, RFC, PRD
 **Strategic Planning**:
 The project-level planning stage: brain dump → clarifying questions → PRD → tickets. Runs
 **once per feature** and *outputs* the tickets that Phase 2 consumes. Its brain-dump step
-carries an **Alignment checkpoint**: a newly surfaced term is captured into `CONTEXT.md`
-inline, and only a cluster of conflicting terms escalates — via a handoff to a fresh
+carries an **Alignment checkpoint**: a lone, additive new term is captured into `CONTEXT.md`
+inline, and only a *conflicting or coupled* term-knot escalates — via a handoff to a fresh
 session — to a full grill-with-docs Alignment pass. Distinct from PIV's Plan step, which is
 ticket-level and runs once per ticket. Term: Cole Medin.
 _Avoid_: conflating with PIV's Plan — Strategic Planning is project-level and produces
@@ -97,8 +97,11 @@ them, Phase 2 consumes them one at a time. Each Ticket is **one file** at
 exactly one; ordering and dependencies live in each file's frontmatter (`blocked_by: […]`),
 with no separate index. The "user story" inside a ticket is a field of its content, not
 another name for it.
-_Avoid_: issue (binds to a specific tracker), story / user story (Scrum baggage, and names
-a field of the ticket, not the ticket)
+_Avoid_: issue (binds to a specific tracker); "story" / "user story" as a *name for this
+unit of work* — the unit is a **Ticket** (Scrum baggage). Note the boundary: "User Stories"
+remains legal as a PRD source-section and `covers_stories` as a Ticket field — those name a
+field/source, not the unit. The glossary gate forbids `issue` / `Jira` outright but `story`
+only when it stands in for the Ticket itself.
 
 **PRD** (Product Requirements Document):
 The document that says *what* to build and why for one feature — the output of Strategic
