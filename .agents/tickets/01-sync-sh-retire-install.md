@@ -3,7 +3,7 @@ id: "01"
 slug: sync-sh-retire-install
 title: sync.sh + retire install.sh + dry-run tests
 type: AFK
-status: ready-for-agent
+status: completed
 blocked_by: []
 prd: .agents/prds/phase-1-machinery.prd.md
 covers_stories: [16, 17, 18, 19, 20, 21, 22]

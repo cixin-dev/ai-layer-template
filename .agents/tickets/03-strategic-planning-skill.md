@@ -3,7 +3,7 @@ id: "03"
 slug: strategic-planning-skill
 title: strategic-planning persona skill
 type: HITL
-status: ready-for-agent
+status: completed
 blocked_by: []
 prd: .agents/prds/phase-1-machinery.prd.md
 covers_stories: [1, 2, 3, 4, 5, 6, 7, 8, 9, 26, 27]

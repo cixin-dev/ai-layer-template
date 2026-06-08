@@ -3,7 +3,7 @@ id: "04"
 slug: readme-context-rewrite
 title: README + CONTEXT.md preamble rewrite
 type: AFK
-status: ready-for-agent
+status: completed
 blocked_by: ["01"]
 prd: .agents/prds/phase-1-machinery.prd.md
 covers_stories: [23, 24, 25, 28]
