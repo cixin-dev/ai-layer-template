@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SYNC_SH="$SCRIPT_DIR/sync.sh"
+
+TMPDIR_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_ROOT"' EXIT
+
+REPO="$TMPDIR_ROOT/repo"
+CLAUDE_HOME_DIR="$TMPDIR_ROOT/claude_home"
+
+FAILURES=0
+
+assert_contains() {
+  local output="$1" pattern="$2" msg="$3"
+  if ! printf '%s' "$output" | grep -qF "$pattern"; then
+    echo "FAIL: $msg"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+assert_not_contains() {
+  local output="$1" pattern="$2" msg="$3"
+  if printf '%s' "$output" | grep -qF "$pattern"; then
+    echo "FAIL: $msg"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+setup_fixture() {
+  rm -rf "$REPO" "$CLAUDE_HOME_DIR"
+
+  # Repo fixture: three skills, three commands
+  mkdir -p "$REPO/.claude/skills/piv-loop"
+  mkdir -p "$REPO/.claude/skills/system-evolution"
+  mkdir -p "$REPO/.claude/skills/tdd-gate"
+  touch "$REPO/.claude/skills/piv-loop/SKILL.md"
+  touch "$REPO/.claude/skills/system-evolution/SKILL.md"
+  touch "$REPO/.claude/skills/tdd-gate/SKILL.md"
+
+  mkdir -p "$REPO/.claude/commands"
+  touch "$REPO/.claude/commands/plan.md"
+  touch "$REPO/.claude/commands/implement.md"
+  touch "$REPO/.claude/commands/retroactive.md"
+
+  # Claude home fixture: upstream symlinks that must never be touched
+  mkdir -p "$CLAUDE_HOME_DIR/skills"
+  mkdir -p "$CLAUDE_HOME_DIR/commands"
+  ln -s /upstream/placeholder "$CLAUDE_HOME_DIR/skills/grill-with-docs"
+  ln -s /upstream/placeholder "$CLAUDE_HOME_DIR/skills/to-prd"
+  ln -s /upstream/placeholder "$CLAUDE_HOME_DIR/skills/grill-me"
+  ln -s /upstream/placeholder "$CLAUDE_HOME_DIR/skills/to-issues"
+}
+
+# --- Test (a): fresh-state dry-run mentions every owned item ---
+setup_fixture
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+
+assert_contains "$output" "would link:" "test(a): at least one 'would link:' line"
+assert_contains "$output" "piv-loop"        "test(a): piv-loop mentioned"
+assert_contains "$output" "system-evolution" "test(a): system-evolution mentioned"
+assert_contains "$output" "tdd-gate"         "test(a): tdd-gate mentioned"
+assert_contains "$output" "plan.md"          "test(a): plan.md mentioned"
+assert_contains "$output" "implement.md"     "test(a): implement.md mentioned"
+assert_contains "$output" "retroactive.md"   "test(a): retroactive.md mentioned"
+
+# --- Test (b): idempotency — pre-linked items produce no 'would link:' ---
+# Create correct symlinks first
+ln -s "$REPO/.claude/skills/piv-loop"        "$CLAUDE_HOME_DIR/skills/piv-loop"
+ln -s "$REPO/.claude/skills/system-evolution" "$CLAUDE_HOME_DIR/skills/system-evolution"
+ln -s "$REPO/.claude/skills/tdd-gate"         "$CLAUDE_HOME_DIR/skills/tdd-gate"
+ln -s "$REPO/.claude/commands/plan.md"        "$CLAUDE_HOME_DIR/commands/plan.md"
+ln -s "$REPO/.claude/commands/implement.md"   "$CLAUDE_HOME_DIR/commands/implement.md"
+ln -s "$REPO/.claude/commands/retroactive.md" "$CLAUDE_HOME_DIR/commands/retroactive.md"
+
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_not_contains "$output" "would link:" "test(b): no 'would link:' when already linked"
+
+# --- Test (c): upstream safety — upstream names never appear in output ---
+setup_fixture  # fresh state (no owned symlinks yet)
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+
+assert_not_contains "$output" "grill-with-docs" "test(c): grill-with-docs not touched"
+assert_not_contains "$output" "to-prd"          "test(c): to-prd not touched"
+assert_not_contains "$output" "grill-me"        "test(c): grill-me not touched"
+assert_not_contains "$output" "to-issues"       "test(c): to-issues not touched"
+
+if [ "$FAILURES" -eq 0 ]; then
+  echo "All tests passed."
+else
+  echo "$FAILURES test(s) failed."
+fi
+
+exit $FAILURES
