@@ -27,9 +27,12 @@ Check git state.
 
 | State | Action |
 |-------|--------|
-| Clean, on main | Create a feature branch |
+| Clean, on main | Create a feature branch (naming below) |
 | Dirty, on main | STOP — ask the user to stash or commit first |
 | On a feature branch | Use it |
+
+Branch name: `feat/{NN}-{slug}` when the plan carries a ticket id (reuse the ticket's
+`{NN}-{slug}`); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
 
 ## Phase 3 — Execute
 
