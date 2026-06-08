@@ -34,6 +34,23 @@ Check git state.
 Branch name: `feat/{NN}-{slug}` when the plan carries a ticket id (reuse the ticket's
 `{NN}-{slug}`); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
 
+### Worktree isolation
+
+After determining the branch name, check `git worktree list` for an existing worktree on
+that branch. Then:
+
+| Worktree state | Action |
+|----------------|--------|
+| Worktree already exists for branch | Use that directory for all work |
+| No worktree exists | `git worktree add ../{repo-dirname}-{branch} {branch}` |
+
+All implementation work (Phases 3–5) happens inside the worktree directory, not the main
+repo. This keeps parallel feature sessions from interfering with each other via
+branch-switching.
+
+Worktree path convention: `../{repo-dirname}-{branch}` — e.g.
+`../ai-layer-template-feat01-sync-sh-retire-install`.
+
 ## Phase 3 — Execute
 
 For each task, in order:
@@ -84,3 +101,6 @@ status — status transitions belong to Validate / human review, not the impleme
 Report branch, validation results, files changed, deviations, artifact paths, and the next
 step (review in a fresh session, then open a PR). If the run surfaced a bug that the AI
 Layer should have prevented, flag it for a [retroactive session](retroactive.md).
+
+Include the worktree cleanup command for after the PR merges:
+`git worktree remove ../{worktree-path}`
