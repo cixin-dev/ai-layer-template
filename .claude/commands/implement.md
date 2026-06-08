@@ -71,8 +71,10 @@ Write `.agents/reports/{plan-name}-report.md` capturing: tasks completed, valida
 results, files changed, deviations from plan (with rationale), and tests written. Then
 archive the plan to `.agents/plans/completed/`.
 
-If a ticket id was in the plan metadata, update the ticket: transition its state and add a
-comment summarizing what shipped, the branch, file/test counts, and deviations.
+If a ticket id was in the plan metadata, add a comment to the ticket summarizing what
+shipped, the branch, file/test counts, and deviations. Do **not** transition the ticket's
+status — status transitions belong to Validate / human review, not the implementer
+(self-promoting your own work defeats the PIV separation). Leave the status untouched.
 
 ## Phase 6 — Output
 
