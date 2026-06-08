@@ -26,7 +26,7 @@ Determine the input and extract a feature understanding:
 |-------|--------|
 | `.prd.md` / `.md` file | Read it; extract the next pending phase or the feature |
 | Free-form text | Use directly |
-| Ticket id (e.g. `AT-23`) | Pull the ticket; treat its body as the feature |
+| Ticket id (e.g. `01`) | Read `.agents/tickets/{NN}-{slug}.md`; treat its body as the feature |
 | Blank | Use conversation context |
 
 Capture: **Problem**, **User story** (As a … I want … so that …), **Type**
