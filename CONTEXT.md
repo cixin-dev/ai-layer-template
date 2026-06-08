@@ -2,11 +2,12 @@
 
 The shared glossary for this project. Every term here means one thing, named one way.
 
-This repository is a **template**: it ships this `CONTEXT.md` pre-seeded with the Harness
-vocabulary (below) so that every new project created from it starts with the same language.
-As a project grows, its own domain terms (e.g. `Session`, `Turn`, `Model Request` — the
-words specific to what that software actually does) are added to this same file. The
-filename is always `CONTEXT.md`.
+This repository is the **single source of project-agnostic harness machinery** — synced
+to user scope (`~/.claude/`), not copied into each project. Each downstream repo keeps its own
+`CONTEXT.md` versioned with its code; that file is where the repo's domain terms (e.g.
+`Session`, `Turn`, `Model Request`) accumulate as the project grows. This copy captures the
+machinery's own Ubiquitous Language — the terms that name the harness concepts themselves.
+The filename is always `CONTEXT.md`.
 
 ## Language
 

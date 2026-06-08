@@ -1,9 +1,20 @@
-# AI Layer Template
+# AI Layer Machinery
 
-A language-agnostic, drop-in **AI Layer** for any codebase: the versioned set of rules,
-commands, skills, and examples that tells Claude Code how to think, work, and verify in a
-project. It encodes a small set of battle-tested ideas from agentic-engineering practice so
-you don't have to re-derive them per project.
+The **single source of project-agnostic harness machinery** — rules, commands, skills, and
+examples that tell Claude Code how to think, work, and verify. Version-controlled here,
+synced to user scope (`~/.claude/`), so every repo gets the same machinery without per-repo
+copies that drift.
+
+## Ownership split
+
+| What | Where it lives | Owned by |
+|------|----------------|----------|
+| Project-agnostic machinery (commands + skills) | This repo; commands + skills symlinked to `~/.claude/` via `sync.sh` | This repo |
+| Project-specific context (`CONTEXT.md`, `docs/adr/`, `CLAUDE.md` "Project specifics", `.agents/`) | Each downstream repo, versioned with its code | That repo |
+
+`CLAUDE.md` and `examples/` are not synced — copy them into each downstream repo manually. Because `sync.sh` creates symlinks (not copies), edits to already-linked skills and commands are visible in `~/.claude/` instantly; re-run `sync.sh` only to pick up new or renamed items.
+
+> **Note:** This repo self-applies this pattern — its own `CONTEXT.md`, `docs/adr/`, and `.agents/` are the machinery's project-specific context, versioned alongside the machinery itself.
 
 ## What's an AI Layer?
 
@@ -39,42 +50,53 @@ ai-layer-template/
 │   │   └── retroactive.md          # System Evolution: improve the AI Layer
 │   └── skills/
 │       ├── piv-loop/SKILL.md
+│       ├── strategic-planning/SKILL.md
 │       ├── system-evolution/SKILL.md
 │       └── tdd-gate/SKILL.md
 ├── examples/
 │   └── deep-module-pattern.md      # on-demand context: a pattern to mirror
 ├── scripts/
-│   └── install.sh                  # copy the AI Layer into a project
+│   └── sync.sh                     # symlink machinery into ~/.claude/
 └── README.md
 ```
 
-## Install
+## Sync
 
-From a checkout of this template:
+From a checkout of this repo:
 
 ```bash
 # Preview (changes nothing):
-bash scripts/install.sh --dry-run /path/to/your/project
+bash scripts/sync.sh --dry-run
 
-# Install (preserves any existing files):
-bash scripts/install.sh /path/to/your/project
-
-# Overwrite existing AI Layer files:
-bash scripts/install.sh --force /path/to/your/project
+# Apply:
+bash scripts/sync.sh
 ```
 
-The installer copies **only** the AI Layer — `CLAUDE.md`, `.claude/`, and `examples/`. It
-never copies this README or the script itself, and it won't overwrite files in your project
-unless you pass `--force`.
+`sync.sh` symlinks each owned skill and command into `~/.claude/{skills,commands}/`. Run it
+once after cloning; re-run after pulling updates to pick up new or renamed items. Real files
+at a target path are warned and skipped — they are never overwritten. If `sync.sh` warns
+about a path, remove that file or directory manually and re-run to replace it with a symlink.
 
-## After installing
+> **Migrating from `install.sh`?** The old installer left real file copies in `~/.claude/`.
+> Run `bash scripts/sync.sh --dry-run` to see what will be skipped, remove those paths, then
+> run `bash scripts/sync.sh`.
 
-1. Open `CLAUDE.md` and fill in the **Project specifics** section (stack, the project's
-   verify commands, architecture, known footguns). Keep it lean.
-2. Add project-specific patterns to `examples/` as conventions emerge.
+> **Note:** `grill-with-docs`, `to-prd`, and `to-issues` are referenced in the workflow but
+> are not vendored here — they are external Claude Code skills (e.g. from the FleetView skill
+> registry) that you install separately into `~/.claude/skills/`.
+
+## After syncing
+
+In each downstream repo:
+
+1. Copy `CLAUDE.md` and `examples/` from this repo into the downstream repo (they are not
+   synced by `sync.sh`). Fill in the **Project specifics** section of `CLAUDE.md` (stack,
+   verify commands, architecture, known footguns). Add a `CONTEXT.md` (glossary) and
+   `docs/adr/` (architecture decisions). Keep it lean. Version-control all of this with
+   the repo's code.
+2. Add project-specific patterns to that repo's `examples/` as conventions emerge.
 3. Use the loop: `/plan` in a fresh session → `/implement <plan>` in another fresh session
    → review → `/retroactive` whenever something slips through.
 
-This template is intentionally stack-neutral — there's no `package.json`, `tsconfig`,
-`pyproject.toml`, or other tooling. Each project supplies its own commands; the AI Layer
-stays portable.
+The machinery itself is stack-neutral — no `package.json`, `tsconfig`, or `pyproject.toml`.
+Each project supplies its own verify commands; the AI Layer stays portable.
