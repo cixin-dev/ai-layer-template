@@ -3,11 +3,16 @@ id: "02"
 slug: to-tickets-fork
 title: to-tickets skill (fork of to-issues)
 type: AFK
-status: ready-for-agent
+status: withdrawn
 blocked_by: []
 prd: .agents/prds/phase-1-machinery.prd.md
 covers_stories: [10, 11, 12, 13, 14, 15]
 ---
+
+> **WITHDRAWN (see ADR-0008).** This ticket forked `to-issues` → `to-tickets` to keep the unit
+> of work tracker-independent. That premise is reversed: the unit is natively a **GitHub Issue**,
+> upstream `to-issues` is **kept** (not forked), and this skill is **never built**. Sunk cost is
+> zero — nothing was implemented. Retained as planning history, not work. Do not implement.
 
 # to-tickets skill (fork of to-issues)
 

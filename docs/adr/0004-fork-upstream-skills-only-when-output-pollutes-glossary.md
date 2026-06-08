@@ -1,5 +1,10 @@
 # Fork upstream skills only when their output pollutes the glossary
 
+**Status:** Superseded by ADR-0008 — its worked example (fork `to-issues` → `to-tickets`) is
+retired: the unit of work is natively a GitHub Issue, and upstream `to-issues` is kept, not
+forked. The general principle below (fork only on glossary pollution) still stands; only the
+`to-issues` application is reversed.
+
 ADR-0003 makes this repository the single source of its harness machinery, synced to user
 scope (`~/.claude/`). But the developer also installs **upstream** skills globally through
 their authors' own installers (Matt Pocock's skills via his script; possibly others later).

@@ -89,19 +89,26 @@ dialogue, which a separate-context, summary-returning sub-agent cannot hold (see
 _Avoid_: sub-agent (runs in its own context, can't conduct the interactive dialogue);
 planner, architect (those name other roles/steps)
 
-**Ticket**:
+**Issue**:
 One independently-grabbable unit of work — the output of Strategic Planning and the input
-to one pass of the PIV Loop. Tickets are the bridge across the two phases: Phase 1 produces
-them, Phase 2 consumes them one at a time. Each Ticket is **one file** at
-`.agents/tickets/{NN}-{slug}.md` — the disk unit equals the work unit, so `/plan` consumes
+to one pass of the PIV Loop. Issues are the bridge across the two phases: Phase 1 produces
+them, Phase 2 consumes them one at a time. The implementer agent's intake source is a
+**GitHub Issue** — the unit is named for what it natively is, not for a tracker-independent
+abstraction (ADR-0008 reverses the earlier "Ticket" framing: tracker-independence is
+over-engineering for a solo, GitHub-bound project). Until this repo is pushed to GitHub, an
+Issue is *drafted* as a local file at `.agents/tickets/{NN}-{slug}.md` — a transitional
+crutch, not a second concept: the disk unit equals the work unit, so `/plan` consumes
 exactly one; ordering and dependencies live in each file's frontmatter (`blocked_by: […]`),
-with no separate index. The "user story" inside a ticket is a field of its content, not
-another name for it.
-_Avoid_: issue (binds to a specific tracker); "story" / "user story" as a *name for this
-unit of work* — the unit is a **Ticket** (Scrum baggage). Note the boundary: "User Stories"
-remains legal as a PRD source-section and `covers_stories` as a Ticket field — those name a
-field/source, not the unit. The glossary gate forbids `issue` / `Jira` outright but `story`
-only when it stands in for the Ticket itself.
+with no separate index. At the GitHub cutover, `to-issues` publishes real Issues and the
+local crutch — together with the legacy `tickets/` dir name — is retired. The "user story"
+inside an Issue is a field of its content, not another name for it.
+_Avoid_: Ticket (the tracker-independence it bought is over-engineering here — ADR-0008; it
+survives transitionally in permanent machinery and the `.agents/tickets/` path, to be swept
+at the GitHub cutover, but is not a licence for new use); Jira (a different specific tracker;
+this project is on GitHub); "story" / "user story" as a *name for this unit of work* — the
+unit is an **Issue** (Scrum baggage). Boundary: "User Stories" remains legal as a PRD
+source-section and `covers_stories` as an Issue field — those name a field/source, not the
+unit.
 
 **PRD** (Product Requirements Document):
 The document that says *what* to build and why for one feature — the output of Strategic
