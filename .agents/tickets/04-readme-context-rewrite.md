@@ -25,9 +25,10 @@ model so they describe the global-machinery model instead (ADR-0003).
   `CLAUDE.md` "Project specifics", `.agents/`) stays versioned in each downstream repo.
 - Replace the **Install** section (the `install.sh` copy commands) with `sync.sh` usage,
   including `--dry-run`.
-- Update the **Layout** block: drop `scripts/install.sh`; add `scripts/sync.sh`, the
-  `strategic-planning` and `to-tickets` skills.
-- Note that `grill-with-docs` and `to-prd` are referenced upstream, not vendored here.
+- Update the **Layout** block: drop `scripts/install.sh`; add `scripts/sync.sh` and the
+  `strategic-planning` skill.
+- Note that `grill-with-docs`, `to-prd`, and `to-issues` are referenced upstream, not vendored
+  here.
 
 `CONTEXT.md` preamble (the intro paragraph, ~lines 5–10):
 
@@ -41,8 +42,8 @@ model so they describe the global-machinery model instead (ADR-0003).
 - [ ] `README.md` no longer presents the repo as a copy-in template and no longer documents
       `install.sh`; it documents `sync.sh` (incl. `--dry-run`) and the global-machinery +
       project-context split.
-- [ ] `README.md` Layout block reflects current files (no `install.sh`; `sync.sh`,
-      `strategic-planning`, `to-tickets` present).
+- [ ] `README.md` Layout block reflects current files (no `install.sh`; `sync.sh` and
+      `strategic-planning` present).
 - [ ] `CONTEXT.md` preamble describes the global-machinery model, not "ships into every new
       project"; the Language section is byte-for-byte unchanged.
 

@@ -4,7 +4,7 @@ slug: strategic-planning-skill
 title: strategic-planning persona skill
 type: HITL
 status: ready-for-agent
-blocked_by: ["02"]
+blocked_by: []
 prd: .agents/prds/phase-1-machinery.prd.md
 covers_stories: [1, 2, 3, 4, 5, 6, 7, 8, 9, 26, 27]
 ---
@@ -27,9 +27,11 @@ The skill:
   discipline. Drop all enterprise GTM / sprint-health / RICE / NPS / roadmap machinery from the
   source persona (ADR-0006).
 - Orchestrates, in the main session: **brain dump → clarifying questions → `to-prd` →
-  `to-tickets`**. It supplies the judgment layer; it calls the upstream `to-prd` for the
-  mechanical PRD generation (so it is not redundant with `to-prd`), then `to-tickets` (Ticket 02)
-  for decomposition.
+  `to-issues`**. It supplies the judgment layer; it calls the upstream `to-prd` for the
+  mechanical PRD generation (so it is not redundant with `to-prd`), then the upstream
+  `to-issues` for decomposition into Issues. Pre-GitHub, decomposition lands as local Issue
+  drafts under `.agents/tickets/`; at the GitHub cutover `to-issues` publishes real Issues
+  (ADR-0008).
 - Carries the **Alignment checkpoint** in its brain-dump step, with a concrete escalation
   predicate (not a count): a surfaced term is captured into `CONTEXT.md` **inline** when it is
   lone, additive, and self-contained (no existing entry contradicts it, definable on its own).
@@ -44,7 +46,7 @@ The skill:
 
 - [ ] `.claude/skills/strategic-planning/SKILL.md` exists with valid frontmatter including
       `disable-model-invocation: true`.
-- [ ] The skill orchestrates brain dump → clarifying questions → `to-prd` → `to-tickets`, in the
+- [ ] The skill orchestrates brain dump → clarifying questions → `to-prd` → `to-issues`, in the
       main session, and references those skills by name.
 - [ ] The persona text carries the judgment instincts (problem-first, repeated "why",
       Non-Goals, say-no, scope discipline) and none of the dropped enterprise machinery.
@@ -56,11 +58,12 @@ The skill:
 
 ## Blocked by
 
-- Ticket 02 (to-tickets fork) — the skill orchestrates `to-tickets`, so that skill must exist
-  for the chain to be real.
+None — the skill orchestrates the upstream `to-prd` and `to-issues`, both already present in
+user scope. (Previously blocked by Ticket 02's to-tickets fork, now withdrawn — ADR-0008.)
 
 ## Notes
 
 HITL: the mined persona judgment is the substance of this Ticket and needs a human review pass
-before merge (ADR-0006). `grill-with-docs` and `to-prd` stay upstream and are merely referenced,
-not vendored (ADR-0004).
+before merge (ADR-0006). `grill-with-docs`, `to-prd`, and `to-issues` stay upstream and are
+merely referenced, not vendored (ADR-0004 principle; `to-issues` is kept rather than forked —
+ADR-0008).
