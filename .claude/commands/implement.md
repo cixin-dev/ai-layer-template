@@ -1,5 +1,5 @@
 ---
-description: Execute an implementation plan with per-task validation loops and an E2E gate
+description: Execute an implementation plan with per-task validation loops
 argument-hint: <path/to/plan.md>
 ---
 
@@ -60,32 +60,19 @@ For each task, in order:
    and match. If the plan is wrong, adapt — and document the deviation.
 2. **Implement.** Follow the mirror reference. Check integration: do imports resolve, do
    callers still work, does data flow correctly across boundaries?
-3. **Validate immediately.** Run the project's check command. On failure: read the error,
-   fix the root cause, re-run, proceed only when green.
-4. **Track progress** with a simple per-task ✅, and record any deviation from the plan
+3. **Write tests for new behavior.** Every new behavior gets at least one test covering the
+   public interface, error cases, and cross-boundary behavior. Tests come before marking the
+   task done — not after.
+4. **Validate immediately.** Run the project's check command (which must include the tests
+   you just wrote). On failure: read the error, fix the root cause, re-run, proceed only
+   when green.
+5. **Track progress** with a simple per-task ✅, and record any deviation from the plan
    and why.
 
 Prefer vertical tracer-bullet slices over a horizontal "all tasks at once" pass — see
 [`tdd-gate.md`](../skills/tdd-gate/SKILL.md).
 
-## Phase 4 — Validate
-
-Run the full check suite (lint / type-check / tests). All must pass with zero errors.
-
-**Write tests for new code**: every new behavior gets at least one test exercising the
-public interface; cover error and edge cases; test across boundaries, not just functions in
-isolation.
-
-### End-to-end verification — hard gate
-
-> Do NOT report complete until every E2E step passes.
-
-Re-read the plan's E2E section and run each test as a checklist: start the app, exercise
-the new/changed behavior, confirm the outcome matches the plan, fix-and-rerun on failure.
-If the plan has no E2E section, do a smoke test of the feature manually. Static checks and
-unit tests alone are never sufficient.
-
-## Phase 5 — Report
+## Phase 4 — Report
 
 Write `.agents/reports/{plan-name}-report.md` capturing: tasks completed, validation
 results, files changed, deviations from plan (with rationale), and tests written. Then
@@ -96,11 +83,11 @@ shipped, the branch, file/test counts, and deviations. Do **not** transition the
 status — status transitions belong to Validate / human review, not the implementer
 (self-promoting your own work defeats the PIV separation). Leave the status untouched.
 
-## Phase 6 — Output
+## Phase 5 — Output
 
-Report branch, validation results, files changed, deviations, artifact paths, and the next
-step (review in a fresh session, then open a PR). If the run surfaced a bug that the AI
-Layer should have prevented, flag it for a [retroactive session](retroactive.md).
+Report branch, per-task validation results, files changed, deviations, and artifact paths.
+The next step is **`/validate <plan-path>`** in a fresh session (full gate + E2E + human
+review entry), then open a PR.
 
 Include the worktree cleanup command for after the PR merges:
 `git worktree remove ../{worktree-path}`

@@ -46,17 +46,29 @@ ai-layer-template/
 ├── .claude/
 │   ├── commands/
 │   │   ├── plan.md                 # PIV: Plan phase
-│   │   ├── implement.md            # PIV: Implement phase + E2E gate
+│   │   ├── implement.md            # PIV: Implement phase
+│   │   ├── validate.md             # PIV: Validate phase (full gate + E2E)
 │   │   └── retroactive.md          # System Evolution: improve the AI Layer
+│   ├── hooks/
+│   │   ├── validate_gate.py        # Stop hook: blocks session end on red gate
+│   │   └── security_guard.py       # PreToolUse hook: deny .env reads + rm -rf
+│   ├── validate.sh                 # this repo's gate script (project-specific,
+│   │                               #   not synced); each project writes its own
 │   └── skills/
 │       ├── piv-loop/SKILL.md
 │       ├── strategic-planning/SKILL.md
 │       ├── system-evolution/SKILL.md
 │       └── tdd-gate/SKILL.md
 ├── examples/
-│   └── deep-module-pattern.md      # on-demand context: a pattern to mirror
+│   ├── deep-module-pattern.md      # on-demand context: a pattern to mirror
+│   └── hooks/                      # concrete hook specializations (reference only)
+│       ├── README.md
+│       ├── stop_validate.py
+│       ├── post_tool_use_lint.py
+│       └── security_guard.py
 ├── scripts/
-│   └── sync.sh                     # symlink machinery into ~/.claude/
+│   ├── sync.sh                     # symlink machinery + wire hooks into ~/.claude/
+│   └── sync.test.sh
 └── README.md
 ```
 
@@ -72,10 +84,18 @@ bash scripts/sync.sh --dry-run
 bash scripts/sync.sh
 ```
 
-`sync.sh` symlinks each owned skill and command into `~/.claude/{skills,commands}/`. Run it
-once after cloning; re-run after pulling updates to pick up new or renamed items. Real files
-at a target path are warned and skipped — they are never overwritten. If `sync.sh` warns
-about a path, remove that file or directory manually and re-run to replace it with a symlink.
+`sync.sh` symlinks each owned skill, command, and hook into `~/.claude/{skills,commands,hooks}/`
+and **additively wires the two hook entries into `~/.claude/settings.json`** (writes a `.bak`
+first; idempotent; never removes your existing keys; falls back to printing a manual snippet
+if `python3` is missing or the file is unparseable). Run once after cloning; re-run after
+pulling updates to pick up new or renamed items. Real files at a target path are warned and
+skipped — they are never overwritten.
+
+The **validate gate** (`validate_gate.py`) is a `Stop` hook that runs your project's
+`.claude/validate.sh` on session end and blocks completion on failure. It **fails open** when
+`.claude/validate.sh` is absent, so it is harmless in any project that hasn't opted in. Each
+project writes its own `.claude/validate.sh` (not synced — project-specific, like `CLAUDE.md`'s
+Project specifics section).
 
 > **Migrating from `install.sh`?** The old installer left real file copies in `~/.claude/`.
 > Run `bash scripts/sync.sh --dry-run` to see what will be skipped, remove those paths, then
@@ -95,8 +115,11 @@ In each downstream repo:
    `docs/adr/` (architecture decisions). Keep it lean. Version-control all of this with
    the repo's code.
 2. Add project-specific patterns to that repo's `examples/` as conventions emerge.
-3. Use the loop: `/plan` in a fresh session → `/implement <plan>` in another fresh session
-   → review → `/retroactive` whenever something slips through.
+3. Write `.claude/validate.sh` that runs your project's verify commands — the global
+   `validate_gate` `Stop` hook will run it automatically on session end.
+4. Use the loop: `/plan` in a fresh session → `/implement <plan>` in another fresh session
+   → `/validate <plan>` in a third session → review → `/retroactive` whenever something
+   slips through.
 
 The machinery itself is stack-neutral — no `package.json`, `tsconfig`, or `pyproject.toml`.
 Each project supplies its own verify commands; the AI Layer stays portable.

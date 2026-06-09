@@ -27,12 +27,14 @@ snippets), files to change, an ordered task list, and the validation strategy. N
 
 **Implement** — **Reopen a fresh session.** The plan file is the entire handoff. Verify the
 plan's assumptions against real code, then execute task by task, validating after each one
-and fixing failures before proceeding. Finish on an end-to-end hard gate.
+and fixing failures before proceeding.
 → run `/implement <plan-path>`.
 
-**Validate** — Automated checks already ran during Implement. Now a human review, ideally
-in a *new* smart-zone session. Pass → merge. Problem → enter the
-[system-evolution](../system-evolution/SKILL.md) outer loop.
+**Validate** — **Fresh session.** Run the full gate (`validate.sh` + the plan's E2E
+checklist), then hand to human review. Pass → merge. Problem → deterministic handoff to
+[`/retroactive`](../system-evolution/SKILL.md) in a fresh session (the System Evolution
+trigger — workflow-routed, not a hook).
+→ run `/validate <plan-path>`.
 
 ## Rules
 

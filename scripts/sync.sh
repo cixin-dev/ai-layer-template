@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Symlink each owned skill/command into ~/.claude/{skills,commands}/.
+# Symlink each owned skill/command/hook into ~/.claude/{skills,commands,hooks}/.
 # Owned items are discovered dynamically from this repo's .claude/ tree.
+# Also additively wires the two hook entries into ~/.claude/settings.json
+# (backs up the file first; idempotent; never removes user keys).
 #
 # Usage:
 #   sync.sh [--dry-run]
@@ -39,7 +41,7 @@ fi
 
 # Ensure target dirs exist (real run only).
 if [ "$DRY_RUN" -eq 0 ]; then
-  mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/commands"
+  mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/commands" "$CLAUDE_DIR/hooks"
 fi
 
 # Link a single owned item. Policy:
@@ -81,4 +83,106 @@ if [ -d "$commands_src" ]; then
     name="$(basename "$cmd_file")"
     link_item "$commands_src/$name" "$CLAUDE_DIR/commands/$name"
   done
+fi
+
+# Hooks: each file under .claude/hooks/
+hooks_src="$REPO_DIR/.claude/hooks"
+if [ -d "$hooks_src" ]; then
+  for hook_file in "$hooks_src"/*; do
+    [ -f "$hook_file" ] || continue
+    name="$(basename "$hook_file")"
+    link_item "$hooks_src/$name" "$CLAUDE_DIR/hooks/$name"
+  done
+fi
+
+# Wire hook entries into settings.json (additive, idempotent, backed-up).
+# Uses python3 (already required by the hooks). Fails open with a manual
+# snippet if python3 is missing or the file is unparseable.
+SETTINGS="$CLAUDE_DIR/settings.json"
+SG_CMD="python3 \"$CLAUDE_DIR/hooks/security_guard.py\""
+VG_CMD="python3 \"$CLAUDE_DIR/hooks/validate_gate.py\""
+
+if ! command -v python3 >/dev/null 2>&1; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would wire hook: PreToolUse -> security_guard.py"
+    note "would wire hook: Stop -> validate_gate.py"
+  else
+    note "warn: python3 not found — wire hooks manually by adding to $SETTINGS:"
+    note "  PreToolUse: $SG_CMD"
+    note "  Stop: $VG_CMD"
+  fi
+else
+  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" <<'PYEOF'
+import json, sys, shutil, pathlib
+
+settings_path = pathlib.Path(sys.argv[1])
+sg_cmd = sys.argv[2]
+vg_cmd = sys.argv[3]
+dry_run = sys.argv[4] == "1"
+
+try:
+    data = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+except Exception as e:
+    if dry_run:
+        print(f"[sync] warn: could not read {settings_path} — assuming hooks not wired", flush=True)
+        print(f"[sync] would wire hook: PreToolUse -> security_guard.py", flush=True)
+        print(f"[sync] would wire hook: Stop -> validate_gate.py", flush=True)
+    else:
+        print(f"[sync] warn: could not parse {settings_path}: {e} — wire hooks manually", flush=True)
+        print(f"[sync]   PreToolUse: {sg_cmd}", flush=True)
+        print(f"[sync]   Stop: {vg_cmd}", flush=True)
+    sys.exit(0)
+
+hooks = data.get("hooks", {})
+
+# Determine what needs wiring.
+sg_matcher = "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Glob|Grep"
+sg_entry = {"type": "command", "command": sg_cmd}
+pre_list = hooks.get("PreToolUse", [])
+existing_pre = next((b for b in pre_list if isinstance(b, dict) and b.get("matcher") == sg_matcher), None)
+if existing_pre is None:
+    needs_pre = True
+elif isinstance(existing_pre.get("hooks"), list):
+    needs_pre = not any(h.get("command") == sg_cmd for h in existing_pre["hooks"] if isinstance(h, dict))
+else:
+    # Non-standard flat format: check top-level command field to avoid false add
+    needs_pre = existing_pre.get("command") != sg_cmd
+
+vg_entry = {"type": "command", "command": vg_cmd}
+stop_list = hooks.get("Stop", [])
+needs_stop = not any(
+    isinstance(b, dict) and any(h.get("command") == vg_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+    for b in stop_list
+)
+
+if dry_run:
+    if needs_pre:
+        print(f"[sync] would wire hook: PreToolUse -> security_guard.py", flush=True)
+    if needs_stop:
+        print(f"[sync] would wire hook: Stop -> validate_gate.py", flush=True)
+else:
+    if needs_pre:
+        hooks_section = data.setdefault("hooks", {})
+        pre_list_rw = hooks_section.setdefault("PreToolUse", [])
+        if existing_pre is None:
+            pre_list_rw.append({"matcher": sg_matcher, "hooks": [sg_entry]})
+        elif isinstance(existing_pre.get("hooks"), list):
+            existing_pre["hooks"].append(sg_entry)
+        else:
+            # Flat-format block owned by someone else — append our own block
+            pre_list_rw.append({"matcher": sg_matcher, "hooks": [sg_entry]})
+    if needs_stop:
+        hooks_section = data.setdefault("hooks", {})
+        hooks_section.setdefault("Stop", []).append({"hooks": [vg_entry]})
+
+    if needs_pre or needs_stop:
+        bak_path = pathlib.Path(str(settings_path) + ".bak")
+        if settings_path.exists() and not bak_path.exists():
+            shutil.copy2(settings_path, bak_path)
+        settings_path.write_text(json.dumps(data, indent=2) + "\n")
+        if needs_pre:
+            print(f"[sync] wired hook: PreToolUse -> security_guard.py", flush=True)
+        if needs_stop:
+            print(f"[sync] wired hook: Stop -> validate_gate.py", flush=True)
+PYEOF
 fi
