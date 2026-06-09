@@ -134,14 +134,39 @@ The per-ticket inner loop — Plan → Implement → Validate — where each pha
 session and the written plan is the only interface between Plan and Implement. The Plan step
 writes a **plan file** (`.agents/plans/{name}.plan.md`) — the sole hand-off between Plan and
 Implement; the Implement step writes a **report** (`.agents/reports/{name}-report.md`)
-recording what was done. Neither is a standalone glossary term — they are named artifacts of
-the loop's steps, not concepts with competing names. Term: Cole Medin.
+recording what was done. The **Validate** step then runs in its own fresh session — `/validate`
+runs the full gate plus the plan's E2E and hands to human review (pass → merge); separately the
+**validate gate** `Stop` hook enforces a green floor automatically at every session-end. Neither
+the plan file nor the report is a standalone glossary term — they are named artifacts of the
+loop's steps, not concepts with competing names. Term: Cole Medin.
 _Avoid_: plan/build/test as loose synonyms
+
+**validate gate**:
+The automatic enforcement floor of the Validate step: a `Stop` hook (`validate_gate.py`) that
+runs the project's `.claude/validate.sh` when a session tries to end and *blocks* completion on
+failure — turning the test-first discipline from a norm into an enforced gate. Global machinery
+(synced to `~/.claude/`), opt-in per project by the presence of `.claude/validate.sh` (fails
+open when absent). One "validate" root, two layers: the **validate gate** is the *automatic
+floor*; **`/validate`** is the *deliberate full pass* (`validate.sh` + the plan's E2E + the entry
+to human review), run as the Validate step's own session. Framing: Cole Medin, who names both
+layers with the single root "validate". The `.claude/validate.sh` indirection is this template's
+language-agnostic extension of Cole's hardcoded hook (ADR-0009).
+_Avoid_: "verify" as a second layer — there is no verify-vs-validate split (a false distinction;
+"verify" survives only in CLAUDE.md's `Verify commands` slot, naming the commands you check
+*with*, which `validate.sh` bundles); conflating the validate gate (automatic hook) with
+`/validate` (deliberate command); tdd-gate (the red-green discipline the gate enforces, not the
+gate itself).
 
 **System Evolution**:
 The outer loop: when a bug slips through, fix the Harness (rules, commands, skills) so the
 class of problem can't recur — not just the surface code. The fix happens in a *retroactive
 session* — a fresh session that interrogates the AI Layer ("you let this reach the codebase;
 what rule/command/skill/template change stops the class?") rather than patching the symptom.
-Each fix compounds. Term: Cole Medin.
-_Avoid_: refactor, post-mortem
+Two layers, kept distinct: the **trigger** is mechanical and frequent — the workflow routes
+into `/retroactive` (PIV's Validate hands a *problem* off; a session that fixes a bug already
+in the codebase ends the same way), never relying on the agent remembering; the **decision**
+to actually run one stays judgment (severity × recurrence). Each fix compounds. Term: Cole
+Medin.
+_Avoid_: refactor, post-mortem; a lifecycle hook (e.g. `SessionEnd`) as the trigger — the
+trigger is a semantic event a mechanical hook can't judge (hooks enforce objective red/green
+floors, handoffs carry semantic flow).

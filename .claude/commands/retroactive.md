@@ -8,9 +8,15 @@ argument-hint: <what went wrong | path to the bug/report>
 **Input**: $ARGUMENTS
 
 This is the **System Evolution** outer loop (see
-[`../skills/system-evolution/SKILL.md`](../skills/system-evolution/SKILL.md)). The PIV Loop just
-surfaced a problem. Do not stop at patching the surface code — fix the AI Layer so the
-problem can't recur.
+[`../skills/system-evolution/SKILL.md`](../skills/system-evolution/SKILL.md)). Do not stop at
+patching the surface code — fix the AI Layer so the problem can't recur.
+
+You are reached through one of two deterministic entry points (ADR-0010), never from memory: the
+Validate step's *problem* branch (`/validate` → here), or a session that just fixed a bug already
+in the codebase routing here on its way out. Reaching this command is the *trigger* — it surfaces
+the option. Whether a full retroactive is warranted is still judgment (severity × recurrence): a
+one-off typo doesn't earn one; a recurring class or a defect that reached the codebase silently
+does.
 
 Frame the session this way:
 

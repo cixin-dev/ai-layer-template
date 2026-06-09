@@ -16,6 +16,11 @@ Improving it is how a one-time mistake becomes a permanent, compounding safeguar
 - **Outer loop** (PIV surfaced a problem): pause → run a retroactive session → improve the
   AI Layer → return to the next PIV.
 
+The outer loop is **triggered through the workflow**, never from memory or a lifecycle hook
+(ADR-0010): two deterministic entry points route into `/retroactive` — the Validate step's
+*problem* branch, and any session that fixes a bug already in the codebase. The trigger only
+*surfaces* the option; whether a retroactive is actually run is a separate judgment (see below).
+
 ## The retroactive session
 
 Frame it bluntly:
