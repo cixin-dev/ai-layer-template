@@ -12,7 +12,7 @@ Improving it is how a one-time mistake becomes a permanent, compounding safeguar
 
 ## Two loops
 
-- **Inner loop** (PIV went fine): finish the ticket → merge → take the next ticket.
+- **Inner loop** (PIV went fine): finish the Issue → merge → take the next Issue.
 - **Outer loop** (PIV surfaced a problem): pause → run a retroactive session → improve the
   AI Layer → return to the next PIV.
 

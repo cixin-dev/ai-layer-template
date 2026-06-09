@@ -41,7 +41,7 @@ The per-task inner loop: **Plan → Implement → Validate**. Each phase is a *f
 the plan file is the only interface between Plan and Implement. This separation is
 deliberate — it stops planning bias and context pollution from leaking into implementation.
 
-1. **Plan** (`/plan`) — New session. Load the ticket plus the relevant slice of the
+1. **Plan** (`/plan`) — New session. Load the Issue plus the relevant slice of the
    codebase, explore (delegate heavy research to sub-agents), and emit a context-rich
    plan to `.agents/plans/{name}.plan.md`. No code is written. The plan names the exact
    `file:line` patterns to mirror, the files to change, an ordered task list, and the

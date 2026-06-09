@@ -1,6 +1,6 @@
 ---
 description: Create a context-rich implementation plan through codebase analysis (no code)
-argument-hint: <feature description | path/to/prd.md | ticket id>
+argument-hint: <feature description | path/to/prd.md | issue number or URL>
 ---
 
 # Plan
@@ -26,12 +26,12 @@ Determine the input and extract a feature understanding:
 |-------|--------|
 | `.prd.md` / `.md` file | Read it; extract the next pending phase or the feature |
 | Free-form text | Use directly |
-| Ticket id (e.g. `01`) | Read `.agents/tickets/{NN}-{slug}.md`; treat its body as the feature |
+| GitHub Issue (number or URL) | Fetch with `gh issue view {N}`; treat its body as the feature |
 | Blank | Use conversation context |
 
 Capture: **Problem**, **User story** (As a … I want … so that …), **Type**
 (NEW / ENHANCEMENT / REFACTOR / BUG_FIX), **Complexity** (LOW / MEDIUM / HIGH), and any
-**ticket id** for later linkback.
+**Issue number** for later linkback.
 
 ## Phase 2 — Explore
 
@@ -71,7 +71,7 @@ As a {user} I want to {action} so that {benefit}
 | Type | {type} |
 | Complexity | {LOW/MEDIUM/HIGH} |
 | Systems affected | {list} |
-| Ticket | {id or N/A} |
+| Issue | {#N or N/A} |
 
 ## Patterns to Follow
 {For each: a real snippet with `// SOURCE: file:lines` so Implement can mirror it.}
