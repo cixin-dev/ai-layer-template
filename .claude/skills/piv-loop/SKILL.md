@@ -1,11 +1,11 @@
 ---
 name: piv-loop
-description: The Plan-Implement-Validate inner loop for working one ticket at a time. Use when starting a feature or bug fix, when deciding how to structure a multi-step task, or when the user mentions PIV, plan/implement/validate, or session separation.
+description: The Plan-Implement-Validate inner loop for working one Issue at a time. Use when starting a feature or bug fix, when deciding how to structure a multi-step task, or when the user mentions PIV, plan/implement/validate, or session separation.
 ---
 
 # PIV Loop
 
-Plan → Implement → Validate. The per-ticket inner loop of agentic engineering. Its defining
+Plan → Implement → Validate. The per-Issue inner loop of agentic engineering. Its defining
 move is **session separation**: each phase runs in its own fresh session, and a written
 file is the only thing that crosses between them.
 
@@ -19,7 +19,7 @@ quality.
 
 ## The three phases
 
-**Plan** — New session. Load the ticket and the relevant codebase slice. Explore, pushing
+**Plan** — New session. Load the Issue and the relevant codebase slice. Explore, pushing
 heavy research to sub-agents so the main context stays lean. Emit
 `.agents/plans/{name}.plan.md` with: user story, patterns to follow (real `file:line`
 snippets), files to change, an ordered task list, and the validation strategy. No code.

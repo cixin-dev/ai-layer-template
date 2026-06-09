@@ -18,7 +18,7 @@ state.
 ## Phase 1 — Load
 
 Read the plan and extract: summary, patterns to mirror, files to change, the ordered task
-list, the validation commands, and any ticket id. If the plan is missing, stop and tell the
+list, the validation commands, and any Issue number. If the plan is missing, stop and tell the
 user to run `/plan` first.
 
 ## Phase 2 — Prepare
@@ -31,8 +31,8 @@ Check git state.
 | Dirty, on main | STOP — ask the user to stash or commit first |
 | On a feature branch | Use it |
 
-Branch name: `feat/{NN}-{slug}` when the plan carries a ticket id (reuse the ticket's
-`{NN}-{slug}`); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
+Branch name: `feat/{N}-{slug}` when the plan carries an Issue number (the Issue's number plus
+a short slug); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
 
 ### Worktree isolation
 
@@ -78,10 +78,11 @@ Write `.agents/reports/{plan-name}-report.md` capturing: tasks completed, valida
 results, files changed, deviations from plan (with rationale), and tests written. Then
 archive the plan to `.agents/plans/completed/`.
 
-If a ticket id was in the plan metadata, add a comment to the ticket summarizing what
-shipped, the branch, file/test counts, and deviations. Do **not** transition the ticket's
-status — status transitions belong to Validate / human review, not the implementer
-(self-promoting your own work defeats the PIV separation). Leave the status untouched.
+If an Issue number was in the plan metadata, add a comment to the Issue (`gh issue comment {N}`)
+summarizing what shipped, the branch, file/test counts, and deviations. Do **not** change the
+Issue's state — closing it or moving its labels belongs to Validate / human review, not the
+implementer (self-promoting your own work defeats the PIV separation). Comment only; leave the
+Issue open.
 
 ## Phase 5 — Output
 

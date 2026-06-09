@@ -38,13 +38,13 @@ _Avoid_: context window (a capacity; the Smart Zone is a quality-of-attention sp
 
 ### Phase 1 — Project Setup (project-level)
 
-The project-level work done before per-ticket coding begins. Two parts on **different
+The project-level work done before per-Issue coding begins. Two parts on **different
 cadences**: **Alignment** establishes shared language and records the decisions that shape
 the work — run in full at a project's birth, then **re-entered whenever new terms surface**
-(ongoing); **Strategic Planning** crystallises intent into a PRD and tickets — **once per
+(ongoing); **Strategic Planning** crystallises intent into a PRD and Issues — **once per
 feature**. In steady state a feature enters Phase 1 through Strategic Planning, not
 Alignment; Strategic Planning is what notices new language and reopens Alignment. Distinct
-from the per-ticket work of Phase 2.
+from the per-Issue work of Phase 2.
 
 **Ubiquitous Language**:
 The single language shared by domain expert, developer, and code to describe the system.
@@ -71,19 +71,19 @@ used; adopted via Matt Pocock.
 _Avoid_: design doc, RFC, PRD
 
 **Strategic Planning**:
-The project-level planning stage: brain dump → clarifying questions → PRD → tickets. Runs
-**once per feature** and *outputs* the tickets that Phase 2 consumes. Its brain-dump step
+The project-level planning stage: brain dump → clarifying questions → PRD → Issues. Runs
+**once per feature** and *outputs* the Issues that Phase 2 consumes. Its brain-dump step
 carries an **Alignment checkpoint**: a lone, additive new term is captured into `CONTEXT.md`
 inline, and only a *conflicting or coupled* term-knot escalates — via a handoff to a fresh
 session — to a full grill-with-docs Alignment pass. Distinct from PIV's Plan step, which is
-ticket-level and runs once per ticket. Term: Cole Medin.
+Issue-level and runs once per Issue. Term: Cole Medin.
 _Avoid_: conflating with PIV's Plan — Strategic Planning is project-level and produces
-tickets; PIV's Plan is ticket-level and consumes one.
+Issues; PIV's Plan is Issue-level and consumes one.
 
 **PM agent**:
 The product-manager *role*, played by the main session adopting a PM persona (the
 `strategic-planning` skill) — **not** a Claude Code sub-agent. It turns discussion,
-including requirements gathered from a non-technical stakeholder, into a PRD and Tickets
+including requirements gathered from a non-technical stakeholder, into a PRD and Issues
 during Strategic Planning, standing in for the human PM this project does not have. It runs
 in the main session because the work is an interactive brain dump → clarifying-questions
 dialogue, which a separate-context, summary-returning sub-agent cannot hold (see ADR-0006).
@@ -96,25 +96,24 @@ to one pass of the PIV Loop. Issues are the bridge across the two phases: Phase 
 them, Phase 2 consumes them one at a time. The implementer agent's intake source is a
 **GitHub Issue** — the unit is named for what it natively is, not for a tracker-independent
 abstraction (ADR-0008 reverses the earlier "Ticket" framing: tracker-independence is
-over-engineering for a solo, GitHub-bound project). Until this repo is pushed to GitHub, an
-Issue is *drafted* as a local file at `.agents/tickets/{NN}-{slug}.md` — a transitional
-crutch, not a second concept: the disk unit equals the work unit, so `/plan` consumes
-exactly one; ordering and dependencies live in each file's frontmatter (`blocked_by: […]`),
-with no separate index. At the GitHub cutover, `to-issues` publishes real Issues and the
-local crutch — together with the legacy `tickets/` dir name — is retired. The "user story"
-inside an Issue is a field of its content, not another name for it.
-_Avoid_: Ticket (the tracker-independence it bought is over-engineering here — ADR-0008; it
-survives transitionally in permanent machinery and the `.agents/tickets/` path, to be swept
-at the GitHub cutover, but is not a licence for new use); Jira (a different specific tracker;
-this project is on GitHub); "story" / "user story" as a *name for this unit of work* — the
-unit is an **Issue** (Scrum baggage). Boundary: "User Stories" remains legal as a PRD
-source-section and `covers_stories` as an Issue field — those name a field/source, not the
-unit.
+over-engineering for a solo, GitHub-bound project). Issues are produced by `to-issues` and
+live on GitHub; `/plan` consumes exactly one (by number or URL), with ordering and
+dependencies expressed as GitHub Issue links (`Blocked by #NN`). The "user story" inside an
+Issue is a field of its content, not another name for it. (Pre-GitHub, an Issue was drafted
+as a local file under `.agents/tickets/`; the GitHub cutover retired that crutch — see
+ADR-0011. Those drafts are frozen as planning history, not migrated.)
+_Avoid_: Ticket (the tracker-independence it bought is over-engineering here — ADR-0008;
+the residual "Ticket" wording was swept at the GitHub cutover (ADR-0011) and now survives
+only in the frozen `.agents/tickets/` archive and historical ADRs/reports, not as a licence
+for new use); Jira (a different specific tracker; this project is on GitHub); "story" /
+"user story" as a *name for this unit of work* — the unit is an **Issue** (Scrum baggage).
+Boundary: "User Stories" remains legal as a PRD source-section and `covers_stories` as an
+Issue field — those name a field/source, not the unit.
 
 **PRD** (Product Requirements Document):
 The document that says *what* to build and why for one feature — the output of Strategic
 Planning, written to `.agents/prds/{name}.prd.md`. One PRD per feature; it decomposes into
-phases, each phase into tickets. It is superseded as intent changes. (The "phase" inside a
+phases, each phase into Issues. It is superseded as intent changes. (The "phase" inside a
 PRD is internal structure, not a glossary term.) Not an ADR — see that entry for the
 boundary.
 _Avoid_: spec, requirements doc, design doc
@@ -125,12 +124,12 @@ focused. The bridge between sessions and between phases — files, never recolle
 the work across. Used in both phases. Term: Matt Pocock.
 _Avoid_: compaction (that continues the *same* session; a handoff opens a new one)
 
-### Phase 2 — Development (per-ticket, ongoing)
+### Phase 2 — Development (per-Issue, ongoing)
 
-The phase that turns aligned intent into working software, one ticket at a time.
+The phase that turns aligned intent into working software, one Issue at a time.
 
 **PIV Loop**:
-The per-ticket inner loop — Plan → Implement → Validate — where each phase is a fresh
+The per-Issue inner loop — Plan → Implement → Validate — where each phase is a fresh
 session and the written plan is the only interface between Plan and Implement. The Plan step
 writes a **plan file** (`.agents/plans/{name}.plan.md`) — the sole hand-off between Plan and
 Implement; the Implement step writes a **report** (`.agents/reports/{name}-report.md`)
