@@ -48,11 +48,10 @@ deliberate — it stops planning bias and context pollution from leaking into im
    validation strategy.
 2. **Implement** (`/implement`) — **Reopen a fresh session.** Read the plan, verify its
    assumptions against the real code, then execute task by task. Run the project's checks
-   after every task and fix failures before moving on — never accumulate broken state. End
-   with an end-to-end verification hard gate.
-3. **Validate** — Automated checks (lint / type-check / tests / E2E) run during Implement.
-   Then a human review, ideally in a *new* smart-zone session. Pass → merge. Problem →
-   drop into the [System Evolution](#system-evolution) outer loop.
+   after every task and fix failures before moving on — never accumulate broken state.
+3. **Validate** (`/validate`) — **Own fresh session.** Runs the full gate (`validate.sh` +
+   the plan's E2E checklist), then hands to human review. Pass → merge. Problem →
+   drop into the [System Evolution](#system-evolution) outer loop via `/retroactive`.
 
 Anytime you find yourself prompting the same thing more than three times, promote it to a
 command or skill.
@@ -102,6 +101,8 @@ clarification.
 implementation → repeat) over writing all tests up front. See
 [`.claude/skills/tdd-gate/SKILL.md`](.claude/skills/tdd-gate/SKILL.md) and
 [`examples/deep-module-pattern.md`](examples/deep-module-pattern.md).
+Each project bundles its verify commands into `.claude/validate.sh`; the global
+`validate_gate` `Stop` hook runs it automatically on session end (fails open when absent).
 
 ---
 
