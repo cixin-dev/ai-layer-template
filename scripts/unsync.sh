@@ -45,20 +45,41 @@ ERRORS=0
 # Absent or symlink-pointing-elsewhere → silent no-op. Real file/dir → skip with note.
 unlink_owned() {
   local src="$1" dst="$2"
-  if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-      note "would remove symlink: $dst"
+  if [ -L "$dst" ]; then
+    local target
+    target="$(readlink "$dst")"
+    local matched=0
+    if [ "$target" = "$src" ]; then
+      matched=1
     else
-      rm -f "$dst"
-      note "removed symlink: $dst"
+      # Cross-mount fallback: owned if target ends with the same /.claude/... suffix.
+      # Uses ## (longest-prefix strip) so an earlier .claude segment in the path
+      # doesn't confuse the match. Upstream links (e.g. /upstream/placeholder)
+      # never contain /.claude/ so they can't match.
+      local suffix
+      suffix="${src##*/.claude}"
+      if [ -n "$suffix" ]; then
+        case "$target" in
+          *"/.claude$suffix") matched=1 ;;
+        esac
+      fi
     fi
+    if [ "$matched" -eq 1 ]; then
+      if [ "$DRY_RUN" -eq 1 ]; then
+        note "would remove symlink: $dst"
+      else
+        rm -f "$dst"
+        note "removed symlink: $dst"
+      fi
+    fi
+    # else: symlink pointing elsewhere (upstream/user) → leave untouched
     return
   fi
   if [ -e "$dst" ] && [ ! -L "$dst" ]; then
     note "skip: $dst is a real file/directory — not ours"
     return
   fi
-  # absent, or symlink pointing elsewhere (upstream/user) → leave untouched
+  # absent → no-op
 }
 
 # Remove a hook file installed by this repo. Ownership is by name (not backlink).
