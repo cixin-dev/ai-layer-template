@@ -28,7 +28,7 @@ def trim_output(text: str) -> str:
     return result
 
 
-def resolve_tree(data: dict):
+def resolve_tree(data: dict) -> "Path | None":
     """Nearest ancestor of the payload cwd that contains .claude/validate.sh.
 
     Walk stops at $HOME and filesystem root so ~/.claude is never mistaken for
@@ -62,16 +62,16 @@ def main() -> None:
     resolved = resolve_tree(data)
     if resolved is not None:
         project_dir = str(resolved)
+        validate_sh = resolved / ".claude" / "validate.sh"
     else:
         project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
         if not project_dir:
             print("[validate-gate] CLAUDE_PROJECT_DIR not set; skipping", file=sys.stderr)
             sys.exit(0)
-
-    validate_sh = Path(project_dir) / ".claude" / "validate.sh"
-    if not validate_sh.is_file():
-        print(f"[validate-gate] no .claude/validate.sh in {project_dir}; skipping", file=sys.stderr)
-        sys.exit(0)
+        validate_sh = Path(project_dir) / ".claude" / "validate.sh"
+        if not validate_sh.is_file():
+            print(f"[validate-gate] no .claude/validate.sh in {project_dir}; skipping", file=sys.stderr)
+            sys.exit(0)
 
     timeout = int(os.environ.get("VALIDATE_GATE_TIMEOUT", "120"))
     try:
