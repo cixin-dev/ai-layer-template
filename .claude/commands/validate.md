@@ -75,9 +75,38 @@ Overall: PASS / FAIL
 - **FAIL**: list every failing check with its error. Fix, re-run, achieve PASS before
   declaring done. Leave the plan in `.agents/plans/` — a failing gate is not "completed".
 
-## Phase 5 — Human review + System Evolution handoff
+## Phase 5 — Push, open PR, and hand to human review
 
-On PASS, hand to a human reviewer in a fresh session (open the PR, share the branch).
+On PASS:
+
+1. **Push the branch** (from inside the feature worktree):
+   `git push -u origin {branch}`
+2. **Open the PR**:
+   ```
+   gh pr create \
+     --title "{short title from plan summary}" \
+     --body "$(cat <<'EOF'
+   ## Summary
+   {plan summary paragraph}
+
+   ## Report
+   `.agents/reports/{plan-name}-report.md`
+
+   Closes #{N}
+   EOF
+   )"
+   ```
+   Include `Closes #{N}` only when the plan carries an Issue number. Pull the summary from
+   the plan's `## Summary` section and the report path from
+   `.agents/reports/{plan-name}-report.md`.
+3. **Share the PR URL** with reviewers.
+
+**Review-fix loop** — if reviewers request changes: open a fresh session inside the feature
+worktree, address the comments, re-run `/validate` (which falls back to `completed/` for
+re-validation — the archive step is idempotent), then push the update with `git push`.
+
+**Successor**: after the PR merges, run `/finish {branch}` in a fresh session from the main
+repo to pull main up to date, remove the worktree, and delete the local and remote branch.
 
 When human review surfaces a **problem** (a bug that reached the codebase, a class of
 miss the AI Layer should have caught), the System Evolution outer loop is triggered through

@@ -31,7 +31,8 @@ and fixing failures before proceeding.
 → run `/implement <plan-path>`.
 
 **Validate** — **Fresh session.** Run the full gate (`validate.sh` + the plan's E2E
-checklist), then hand to human review. Pass → merge. Problem → deterministic handoff to
+checklist), then hand to human review. Pass → push + open PR → merge → run
+`/finish {branch}`. Problem → deterministic handoff to
 [`/retroactive`](../system-evolution/SKILL.md) in a fresh session (the System Evolution
 trigger — workflow-routed, not a hook).
 → run `/validate <plan-path>`.
