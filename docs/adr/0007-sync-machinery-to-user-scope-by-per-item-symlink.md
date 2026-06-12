@@ -1,5 +1,8 @@
 # Sync machinery to user scope by per-item symlink; install.sh retires
 
+**Status:** Partially superseded by ADR-0012 — hooks are now copied, not symlinked, for NFS
+resilience; skills and commands remain per-item symlinks as decided here.
+
 ADR-0003 declared that this repo's machinery is synced to user scope (`~/.claude/`) and that
 `install.sh` retires — but left the **mechanism** unspecified. This ADR settles it.
 

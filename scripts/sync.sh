@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Symlink each owned skill/command/hook into ~/.claude/{skills,commands,hooks}/.
+# Symlink each owned skill/command into ~/.claude/{skills,commands}/; copy hooks
+# into ~/.claude/hooks/ as real files (so they survive an unmounted NFS share).
 # Owned items are discovered dynamically from this repo's .claude/ tree.
 # Also additively wires the two hook entries into ~/.claude/settings.json
 # (backs up the file first; idempotent; never removes user keys).
@@ -65,6 +66,40 @@ link_item() {
   fi
 }
 
+# Copy a single hook file. Policy:
+#   - unreadable src → warn and skip
+#   - real directory at dst → warn and skip
+#   - real file (not a symlink), executable, identical to src → skip (idempotent)
+#   - absent, symlink (including dangling), non-executable, or stale-content copy → copy/refresh
+#   - real file with different content → warn of local changes, then overwrite
+copy_item() {
+  local src="$1" dst="$2"
+  if [ ! -r "$src" ]; then
+    note "warn: $src is not readable — skipped"
+    return
+  fi
+  if [ -d "$dst" ] && [ ! -L "$dst" ]; then
+    note "warn: $dst is a directory — skipped"
+    return
+  fi
+  if [ -f "$dst" ] && [ ! -L "$dst" ] && [ -x "$dst" ] && cmp -s "$src" "$dst"; then
+    return
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would copy: $dst <- $src"
+  else
+    if [ -f "$dst" ] && [ ! -L "$dst" ] && ! cmp -s "$src" "$dst" 2>/dev/null; then
+      note "warn: $dst had local changes — overwriting"
+    fi
+    local tmp
+    tmp="${dst}.tmp.$$"
+    cp "$src" "$tmp"
+    chmod +x "$tmp"
+    mv "$tmp" "$dst"
+    note "copied: $dst <- $src"
+  fi
+}
+
 # Skills: each subdirectory under .claude/skills/
 skills_src="$REPO_DIR/.claude/skills"
 if [ -d "$skills_src" ]; then
@@ -91,7 +126,7 @@ if [ -d "$hooks_src" ]; then
   for hook_file in "$hooks_src"/*; do
     [ -f "$hook_file" ] || continue
     name="$(basename "$hook_file")"
-    link_item "$hooks_src/$name" "$CLAUDE_DIR/hooks/$name"
+    copy_item "$hooks_src/$name" "$CLAUDE_DIR/hooks/$name"
   done
 fi
 
@@ -151,7 +186,10 @@ else:
 vg_entry = {"type": "command", "command": vg_cmd}
 stop_list = hooks.get("Stop", [])
 needs_stop = not any(
-    isinstance(b, dict) and any(h.get("command") == vg_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+    isinstance(b, dict) and (
+        any(h.get("command") == vg_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+        or b.get("command") == vg_cmd
+    )
     for b in stop_list
 )
 
