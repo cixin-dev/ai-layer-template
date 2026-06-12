@@ -28,6 +28,10 @@ Resolve which plan to validate via a three-tier contract:
 **Files are the only durable source.** Never infer E2E steps from the conversation — only
 from the plan file. If no plan exists, say so explicitly rather than guessing.
 
+Resolution is relative to the current checkout (the feature worktree). The plan is a
+tracked file on the branch since its first commit (`/implement` Phase 2 seeds it); no
+cross-checkout reads into the main repo are ever needed or allowed.
+
 ## Phase 2 — Run the mechanical gate
 
 Run the project's verify commands as listed in `CLAUDE.md → Verify commands` (or execute
@@ -60,10 +64,14 @@ E2E:   PASS / FAIL / SKIPPED (no plan)
 Overall: PASS / FAIL
 ```
 
-- **PASS**: archive the plan to `.agents/plans/completed/{slug}.plan.md` — this is the point
-  a plan becomes "completed" (a green gate, not implementation's end). If the plan was already
-  resolved from `completed/` (a re-validation), it is already archived — skip the move. Then
-  the tree is ready for human review → merge.
+- **PASS**: archive the plan with
+  `git mv .agents/plans/{slug}.plan.md .agents/plans/completed/{slug}.plan.md`
+  then commit on the branch:
+  `git commit -m "docs(plan): archive {slug} plan on green gate"`.
+  This is the point a plan becomes "completed" (a green gate, not implementation's end);
+  the squash-merge carries `completed/{slug}.plan.md` into main. If the plan was already
+  resolved from `completed/` (a re-validation), it is already archived — skip the move.
+  Then the tree is ready for human review → merge.
 - **FAIL**: list every failing check with its error. Fix, re-run, achieve PASS before
   declaring done. Leave the plan in `.agents/plans/` — a failing gate is not "completed".
 
