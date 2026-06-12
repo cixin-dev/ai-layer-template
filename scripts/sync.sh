@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Symlink each owned skill/command/hook into ~/.claude/{skills,commands,hooks}/.
+# Symlink each owned skill/command into ~/.claude/{skills,commands}/; copy hooks
+# into ~/.claude/hooks/ as real files (so they survive an unmounted NFS share).
 # Owned items are discovered dynamically from this repo's .claude/ tree.
 # Also additively wires the two hook entries into ~/.claude/settings.json
 # (backs up the file first; idempotent; never removes user keys).
@@ -65,6 +66,24 @@ link_item() {
   fi
 }
 
+# Copy a single hook file. Policy:
+#   - real file (not a symlink) identical to src → skip (idempotent)
+#   - absent, a symlink (including dangling), or stale-content copy → copy/refresh
+copy_item() {
+  local src="$1" dst="$2"
+  if [ -f "$dst" ] && [ ! -L "$dst" ] && cmp -s "$src" "$dst"; then
+    return
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would copy: $dst <- $src"
+  else
+    rm -f "$dst"
+    cp "$src" "$dst"
+    chmod +x "$dst"
+    note "copied: $dst <- $src"
+  fi
+}
+
 # Skills: each subdirectory under .claude/skills/
 skills_src="$REPO_DIR/.claude/skills"
 if [ -d "$skills_src" ]; then
@@ -91,7 +110,7 @@ if [ -d "$hooks_src" ]; then
   for hook_file in "$hooks_src"/*; do
     [ -f "$hook_file" ] || continue
     name="$(basename "$hook_file")"
-    link_item "$hooks_src/$name" "$CLAUDE_DIR/hooks/$name"
+    copy_item "$hooks_src/$name" "$CLAUDE_DIR/hooks/$name"
   done
 fi
 

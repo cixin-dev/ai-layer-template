@@ -44,6 +44,22 @@ assert_file_not_exists() {
   fi
 }
 
+assert_not_symlink() {
+  local path="$1" msg="$2"
+  if [ -L "$path" ]; then
+    echo "FAIL: $msg (path is a symlink: $path)"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+assert_executable() {
+  local path="$1" msg="$2"
+  if [ ! -x "$path" ]; then
+    echo "FAIL: $msg (path is not executable: $path)"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 setup_fixture() {
   rm -rf "$REPO" "$CLAUDE_HOME_DIR"
 
@@ -103,6 +119,7 @@ SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
 
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
 assert_not_contains "$output" "would link:"     "test(b): no 'would link:' when already linked"
+assert_not_contains "$output" "would copy:"     "test(b): no 'would copy:' when hooks already real copies"
 assert_not_contains "$output" "would wire hook" "test(b): no 'would wire hook' when settings already wired"
 
 # --- Test (c): upstream safety — upstream names never appear in output ---
@@ -114,11 +131,11 @@ assert_not_contains "$output" "to-prd"          "test(c): to-prd not touched"
 assert_not_contains "$output" "grill-me"        "test(c): grill-me not touched"
 assert_not_contains "$output" "to-issues"       "test(c): to-issues not touched"
 
-# --- Test (d): dry-run mentions hook files as 'would link:' ---
+# --- Test (d): dry-run mentions hook files as 'would copy:' ---
 setup_fixture
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
-assert_contains "$output" "validate_gate.py"  "test(d): validate_gate.py mentioned as would link:"
-assert_contains "$output" "security_guard.py" "test(d): security_guard.py mentioned as would link:"
+assert_contains "$output" "validate_gate.py"  "test(d): validate_gate.py mentioned as would copy:"
+assert_contains "$output" "security_guard.py" "test(d): security_guard.py mentioned as would copy:"
 assert_contains "$output" "validate.md"       "test(d): validate.md mentioned as would link:"
 
 # --- Test (e): dry-run mentions 'would wire hook' for both hooks, leaves no settings.json ---
@@ -127,12 +144,16 @@ assert_contains "$output" "Stop"             "test(e): Stop hook mentioned in dr
 assert_contains "$output" "PreToolUse"       "test(e): PreToolUse hook mentioned in dry-run"
 assert_file_not_exists "$CLAUDE_HOME_DIR/settings.json" "test(e): dry-run must not create settings.json"
 
-# --- Test (f): real run creates hook symlinks and wires settings.json ---
+# --- Test (f): real run creates hook copies (real files, executable) and wires settings.json ---
 setup_fixture
 SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
-assert_file_exists "$CLAUDE_HOME_DIR/hooks/validate_gate.py"  "test(f): validate_gate.py symlink created"
-assert_file_exists "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(f): security_guard.py symlink created"
-assert_file_exists "$CLAUDE_HOME_DIR/settings.json"           "test(f): settings.json created"
+assert_file_exists  "$CLAUDE_HOME_DIR/hooks/validate_gate.py"  "test(f): validate_gate.py created"
+assert_not_symlink  "$CLAUDE_HOME_DIR/hooks/validate_gate.py"  "test(f): validate_gate.py is a real file"
+assert_executable   "$CLAUDE_HOME_DIR/hooks/validate_gate.py"  "test(f): validate_gate.py is executable"
+assert_file_exists  "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(f): security_guard.py created"
+assert_not_symlink  "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(f): security_guard.py is a real file"
+assert_executable   "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(f): security_guard.py is executable"
+assert_file_exists  "$CLAUDE_HOME_DIR/settings.json"           "test(f): settings.json created"
 settings_content="$(cat "$CLAUDE_HOME_DIR/settings.json")"
 assert_contains "$settings_content" "validate_gate.py"  "test(f): settings.json references validate_gate.py"
 assert_contains "$settings_content" "security_guard.py" "test(f): settings.json references security_guard.py"
@@ -161,6 +182,28 @@ fi
 setup_fixture
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
 assert_contains "$output" "validate.md" "test(h): validate.md appears in dry-run would link:"
+
+# --- Test (i): symlink-into-NFS pre-state becomes real, executable, repo-matching files ---
+# Simulates issue #2: machine with old hook symlinks pointing into the NFS share.
+setup_fixture
+# Populate repo hooks with known content so cmp has something to match.
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/security_guard.py"
+# Pre-create hook dir with symlinks pointing at a fake "NFS" source (the repo itself).
+mkdir -p "$CLAUDE_HOME_DIR/hooks"
+ln -s "$REPO/.claude/hooks/validate_gate.py"  "$CLAUDE_HOME_DIR/hooks/validate_gate.py"
+ln -s "$REPO/.claude/hooks/security_guard.py" "$CLAUDE_HOME_DIR/hooks/security_guard.py"
+# Run sync.sh; it must replace the symlinks with real copies.
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+for hook in validate_gate.py security_guard.py; do
+  assert_file_exists "$CLAUDE_HOME_DIR/hooks/$hook" "test(i): $hook exists after migration"
+  assert_not_symlink "$CLAUDE_HOME_DIR/hooks/$hook" "test(i): $hook is a real file after migration"
+  assert_executable  "$CLAUDE_HOME_DIR/hooks/$hook" "test(i): $hook is executable after migration"
+  if ! cmp -s "$REPO/.claude/hooks/$hook" "$CLAUDE_HOME_DIR/hooks/$hook"; then
+    echo "FAIL: test(i): $hook contents do not match repo source after migration"
+    FAILURES=$((FAILURES + 1))
+  fi
+done
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
