@@ -45,6 +45,10 @@ if [ "$DRY_RUN" -eq 0 ]; then
   mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/commands" "$CLAUDE_DIR/hooks"
 fi
 
+# Skills and commands use symlinks (not copies) intentionally: edits in the repo
+# are immediately visible to Claude Code without re-running sync.sh. The trade-off
+# is that they require the repo to be mounted; hooks use copies for resilience instead.
+#
 # Link a single owned item. Policy:
 #   - already correct symlink → skip (idempotent)
 #   - real file/dir (not a symlink) → warn and skip (user data)
