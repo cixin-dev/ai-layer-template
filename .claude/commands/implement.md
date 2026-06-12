@@ -29,7 +29,8 @@ Check git state.
 |-------|--------|
 | Clean, on main, in sync with origin | Create a feature branch (naming below) |
 | Clean, on main but ahead of origin/main | STOP — main has local-only commits, which breaks the never-commit-to-main rule. Surface them to the user and resolve (move to a branch, or push if truly intended) before proceeding — do not silently auto-push |
-| Dirty, on main | STOP — ask the user to stash or commit first |
+| Dirty, on main (tracked files modified) | STOP — ask the user to stash or commit first |
+| On main, only untracked files under `.agents/plans/` | Expected — that's the plan draft awaiting pickup (see "Seed the plan" below); proceed |
 | On a feature branch | Use it |
 
 Before branching, run `git log origin/main..main --oneline` as a tripwire — main should never
@@ -60,6 +61,27 @@ branch-switching.
 Worktree path convention: `../{repo-dirname}-{branch}` — e.g.
 `../ai-layer-template-feat01-sync-sh-retire-install`.
 
+### Seed the plan into the branch
+
+A worktree materializes only main's committed state, so an uncommitted plan draft is
+invisible inside it. Committing the plan as the branch's first commit makes it readable by
+Phase 3, by `/validate`, and carries it to main via the PR's squash-merge
+`(retroactive: fix-plan-file-first-commit)`.
+
+1. **Copy** the plan file from the main repo (the path resolved in Phase 1) into the
+   worktree's `.agents/plans/{slug}.plan.md` — create the directory if absent (worktrees
+   materialize only committed paths, and `.agents/plans/` may not yet exist on the branch).
+2. **Commit it as the first commit on the branch**, from inside the worktree:
+   `git add .agents/plans/{slug}.plan.md && git commit -m "docs(plan): add {slug} plan"`.
+   This commit lands on `{branch}` inside the worktree — it never touches main.
+3. **Delete the uncommitted draft** from the main repo working dir, only after the commit
+   succeeds. The branch copy is now the single canonical source; deviations the implementer
+   records into it (Phase 3 step 5) cannot diverge from a stale draft.
+4. **Idempotence guard** (for the "worktree already exists" row): if
+   `.agents/plans/{slug}.plan.md` is already tracked on the branch, skip the copy/commit.
+   If a main-repo draft still lingers, remove it only when identical to the branch copy;
+   otherwise surface the difference to the user rather than silently picking one.
+
 ## Phase 3 — Execute
 
 For each task, in order:
@@ -85,9 +107,11 @@ Prefer vertical tracer-bullet slices over a horizontal "all tasks at once" pass 
 
 Write `.agents/reports/{plan-name}-report.md` capturing: tasks completed, validation
 results, files changed, deviations from plan (with rationale), and tests written. Leave the
-plan in `.agents/plans/` — `/validate` archives it to `completed/` on a green gate. A plan is
-"completed" only once it passes validation, not when implementation ends, so archiving is
-Validate's job, not yours.
+plan in `.agents/plans/` (worktree-relative — it is a tracked file on the branch since its
+first commit, so deviations recorded into it must be committed on the branch like any other
+change; never reach back into the main repo checkout). `/validate` archives it to
+`completed/` on a green gate. A plan is "completed" only once it passes validation, not when
+implementation ends, so archiving is Validate's job, not yours.
 
 **Norm — self-check before Phase 5 output.** This is a soft gate you honor, not a
 hook-enforced floor (the validate gate is the only hook-enforced floor; file existence here
