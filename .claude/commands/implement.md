@@ -65,8 +65,7 @@ Worktree path convention: `../{repo-dirname}-{branch}` — e.g.
 
 A worktree materializes only main's committed state, so an uncommitted plan draft is
 invisible inside it. Committing the plan as the branch's first commit makes it readable by
-Phase 3, by `/validate`, and carries it to main via the PR's squash-merge
-`(retroactive: fix-plan-file-first-commit)`.
+Phase 3, by `/validate`, and carries it to main via the PR's squash-merge.
 
 1. **Copy** the plan file from the main repo (the path resolved in Phase 1) into the
    worktree's `.agents/plans/{slug}.plan.md` — create the directory if absent (worktrees
