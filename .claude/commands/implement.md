@@ -42,7 +42,10 @@ that branch. Then:
 | Worktree state | Action |
 |----------------|--------|
 | Worktree already exists for branch | Use that directory for all work |
-| No worktree exists | `git worktree add ../{repo-dirname}-{branch} {branch}` |
+| Branch doesn't exist yet | `git worktree add -b {branch} ../{repo-dirname}-{branch} main` (atomic; main stays on main) |
+| Branch exists but no worktree | `git worktree add ../{repo-dirname}-{branch} {branch}` |
+
+Never run `git checkout -b` before `git worktree add` — that switches the main worktree to the feature branch, causing the subsequent `worktree add` to fail with "already used by worktree."
 
 All implementation work (Phases 3–5) happens inside the worktree directory, not the main
 repo. This keeps parallel feature sessions from interfering with each other via
