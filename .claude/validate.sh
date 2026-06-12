@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec bash "$(dirname "$0")/../scripts/sync.test.sh"
+dir="$(dirname "$0")/../scripts"
+bash "$dir/sync.test.sh"
+bash "$dir/unsync.test.sh"

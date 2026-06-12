@@ -68,7 +68,9 @@ ai-layer-template/
 │       └── security_guard.py
 ├── scripts/
 │   ├── sync.sh                     # symlink machinery + wire hooks into ~/.claude/
-│   └── sync.test.sh
+│   ├── sync.test.sh
+│   ├── unsync.sh                   # inverse of sync.sh — clean teardown
+│   └── unsync.test.sh
 └── README.md
 ```
 
@@ -90,6 +92,21 @@ first; idempotent; never removes your existing keys; falls back to printing a ma
 if `python3` is missing or the file is unparseable). Run once after cloning; re-run after
 pulling updates to pick up new or renamed items. Real files at a target path are warned and
 skipped — they are never overwritten.
+
+To reverse the install:
+
+```bash
+# Preview (changes nothing):
+bash scripts/unsync.sh --dry-run
+
+# Apply:
+bash scripts/unsync.sh
+```
+
+`unsync.sh` is the exact inverse of `sync.sh`: it removes only the symlinks pointing into this
+repo, removes the copied hook files, and either restores `~/.claude/settings.json` from its
+`.bak` backup or surgically removes the two hook entries. User files, real directories, and
+upstream symlinks are never touched. Safe to run repeatedly — idempotent.
 
 The **validate gate** (`validate_gate.py`) is a `Stop` hook that runs your project's
 `.claude/validate.sh` on session end and blocks completion on failure. It **fails open** when
