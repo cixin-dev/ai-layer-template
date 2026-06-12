@@ -67,19 +67,35 @@ link_item() {
 }
 
 # Copy a single hook file. Policy:
-#   - real file (not a symlink) identical to src → skip (idempotent)
-#   - absent, a symlink (including dangling), or stale-content copy → copy/refresh
+#   - unreadable src → warn and skip
+#   - real directory at dst → warn and skip
+#   - real file (not a symlink), executable, identical to src → skip (idempotent)
+#   - absent, symlink (including dangling), non-executable, or stale-content copy → copy/refresh
+#   - real file with different content → warn of local changes, then overwrite
 copy_item() {
   local src="$1" dst="$2"
-  if [ -f "$dst" ] && [ ! -L "$dst" ] && cmp -s "$src" "$dst"; then
+  if [ ! -r "$src" ]; then
+    note "warn: $src is not readable — skipped"
+    return
+  fi
+  if [ -d "$dst" ] && [ ! -L "$dst" ]; then
+    note "warn: $dst is a directory — skipped"
+    return
+  fi
+  if [ -f "$dst" ] && [ ! -L "$dst" ] && [ -x "$dst" ] && cmp -s "$src" "$dst"; then
     return
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     note "would copy: $dst <- $src"
   else
-    rm -f "$dst"
-    cp "$src" "$dst"
-    chmod +x "$dst"
+    if [ -f "$dst" ] && [ ! -L "$dst" ] && ! cmp -s "$src" "$dst" 2>/dev/null; then
+      note "warn: $dst had local changes — overwriting"
+    fi
+    local tmp
+    tmp="${dst}.tmp.$$"
+    cp "$src" "$tmp"
+    chmod +x "$tmp"
+    mv "$tmp" "$dst"
     note "copied: $dst <- $src"
   fi
 }
@@ -170,7 +186,10 @@ else:
 vg_entry = {"type": "command", "command": vg_cmd}
 stop_list = hooks.get("Stop", [])
 needs_stop = not any(
-    isinstance(b, dict) and any(h.get("command") == vg_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+    isinstance(b, dict) and (
+        any(h.get("command") == vg_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+        or b.get("command") == vg_cmd
+    )
     for b in stop_list
 )
 

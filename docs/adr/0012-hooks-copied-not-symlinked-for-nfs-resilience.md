@@ -30,8 +30,8 @@ practical drift window is narrow.
 
 **Migration of already-installed machines (issue #2).**
 Machines that currently have symlinks in `~/.claude/hooks/` are fixed by running the updated
-`sync.sh` once. `copy_item` removes any existing dst (symlink or stale copy) before copying, so
-re-running `sync.sh` atomically replaces the dangling symlinks with real files. No separate
+`sync.sh` once. `copy_item` writes to a temp file then renames into place (atomic on POSIX for same-filesystem
+moves), so a dangling symlink is replaced cleanly in a single `sync.sh` run. No separate
 migration script is needed.
 
 Alternatives rejected:

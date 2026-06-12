@@ -103,6 +103,9 @@ assert_contains "$output" "implement.md"     "test(a): implement.md mentioned"
 assert_contains "$output" "retroactive.md"   "test(a): retroactive.md mentioned"
 
 # --- Test (b): idempotency — pre-linked items and pre-wired settings produce no output ---
+# Use non-empty content so cmp -s exercises real comparison, not trivially-equal empty files.
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/security_guard.py"
 # Create correct symlinks first (all owned items, including hooks)
 ln -s "$REPO/.claude/skills/piv-loop"          "$CLAUDE_HOME_DIR/skills/piv-loop"
 ln -s "$REPO/.claude/skills/system-evolution"  "$CLAUDE_HOME_DIR/skills/system-evolution"
@@ -134,6 +137,7 @@ assert_not_contains "$output" "to-issues"       "test(c): to-issues not touched"
 # --- Test (d): dry-run mentions hook files as 'would copy:' ---
 setup_fixture
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_contains "$output" "would copy:"       "test(d): 'would copy:' appears in dry-run output"
 assert_contains "$output" "validate_gate.py"  "test(d): validate_gate.py mentioned as would copy:"
 assert_contains "$output" "security_guard.py" "test(d): security_guard.py mentioned as would copy:"
 assert_contains "$output" "validate.md"       "test(d): validate.md mentioned as would link:"
@@ -204,6 +208,64 @@ for hook in validate_gate.py security_guard.py; do
     FAILURES=$((FAILURES + 1))
   fi
 done
+
+# --- Test (j): chmod -x on installed hook is repaired by next sync ---
+setup_fixture
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/security_guard.py"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+chmod -x "$CLAUDE_HOME_DIR/hooks/validate_gate.py"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+assert_executable "$CLAUDE_HOME_DIR/hooks/validate_gate.py" "test(j): chmod -x on installed hook repaired by next sync"
+
+# --- Test (k): user-modified hook content → sync warns before overwriting ---
+setup_fixture
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+echo '# user addition' >> "$CLAUDE_HOME_DIR/hooks/validate_gate.py"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH")"
+assert_contains "$output" "warn" "test(k): warns when overwriting user-modified hook"
+
+# --- Test (l): unreadable src → sync warns, skips, preserves dst, script continues ---
+setup_fixture
+echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+chmod 000 "$REPO/.claude/hooks/validate_gate.py"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" 2>&1)" || true
+chmod 644 "$REPO/.claude/hooks/validate_gate.py"
+assert_contains "$output" "warn" "test(l): warns when src is unreadable"
+assert_file_exists "$CLAUDE_HOME_DIR/hooks/validate_gate.py" "test(l): dst preserved when src unreadable"
+assert_file_exists "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(l): other hooks still installed when one src unreadable"
+
+# --- Test (m): directory at dst → sync warns, skips, script continues, other hooks installed ---
+setup_fixture
+mkdir -p "$CLAUDE_HOME_DIR/hooks/validate_gate.py"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" 2>&1)" || true
+assert_contains "$output" "warn" "test(m): warns when dst is a directory"
+assert_file_exists "$CLAUDE_HOME_DIR/hooks/security_guard.py" "test(m): other hooks installed when one dst is a directory"
+
+# --- Test (n): flat-format Stop entry already present → sync does not add a duplicate ---
+setup_fixture
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+# Convert the nested Stop entry to flat format: {"command": "..."} without a "hooks" wrapper.
+python3 - "$CLAUDE_HOME_DIR/settings.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+data = json.loads(open(path).read())
+stop_list = data.get("hooks", {}).get("Stop", [])
+flat = []
+for b in stop_list:
+    if isinstance(b, dict) and isinstance(b.get("hooks"), list):
+        for h in b["hooks"]:
+            if isinstance(h, dict) and "command" in h:
+                flat.append({"command": h["command"]})
+    else:
+        flat.append(b)
+data["hooks"]["Stop"] = flat
+open(path, "w").write(json.dumps(data, indent=2) + "\n")
+PYEOF
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_not_contains "$output" "would wire hook: Stop" "test(n): flat-format Stop entry recognized — no duplicate wired"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
