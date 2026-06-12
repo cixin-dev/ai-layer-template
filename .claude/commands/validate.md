@@ -22,7 +22,7 @@ Resolve which plan to validate via a three-tier contract:
 | Input | Action |
 |-------|--------|
 | Plan path given (`$ARGUMENTS`) | Use it directly; read its E2E section |
-| Blank | Infer from current branch: `feat/{NN}-{slug}` → `.agents/plans/{slug}.plan.md` |
+| Blank | Infer from current branch `feat/{NN}-{slug}`: try `.agents/plans/{slug}.plan.md`, then fall back to `.agents/plans/completed/{slug}.plan.md` (a re-validation after a prior pass) |
 | No plan found | Run the mechanical gate only; state "no plan — E2E skipped" |
 
 **Files are the only durable source.** Never infer E2E steps from the conversation — only
@@ -60,9 +60,12 @@ E2E:   PASS / FAIL / SKIPPED (no plan)
 Overall: PASS / FAIL
 ```
 
-- **PASS**: the tree is ready for human review → merge.
+- **PASS**: archive the plan to `.agents/plans/completed/{slug}.plan.md` — this is the point
+  a plan becomes "completed" (a green gate, not implementation's end). If the plan was already
+  resolved from `completed/` (a re-validation), it is already archived — skip the move. Then
+  the tree is ready for human review → merge.
 - **FAIL**: list every failing check with its error. Fix, re-run, achieve PASS before
-  declaring done.
+  declaring done. Leave the plan in `.agents/plans/` — a failing gate is not "completed".
 
 ## Phase 5 — Human review + System Evolution handoff
 

@@ -27,9 +27,15 @@ Check git state.
 
 | State | Action |
 |-------|--------|
-| Clean, on main | Create a feature branch (naming below) |
+| Clean, on main, in sync with origin | Create a feature branch (naming below) |
+| Clean, on main but ahead of origin/main | STOP — main has local-only commits, which breaks the never-commit-to-main rule. Surface them to the user and resolve (move to a branch, or push if truly intended) before proceeding — do not silently auto-push |
 | Dirty, on main | STOP — ask the user to stash or commit first |
 | On a feature branch | Use it |
+
+Before branching, run `git log origin/main..main --oneline` as a tripwire — main should never
+be ahead of origin (every change flows through a branch + PR; see CLAUDE.md Do-not). If commits
+appear, the invariant was breached upstream: stop and surface them rather than silently pushing,
+since a local-only main commit becomes a divergence after the next squash-merge.
 
 Branch name: `feat/{N}-{slug}` when the plan carries an Issue number (the Issue's number plus
 a short slug); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
@@ -78,8 +84,15 @@ Prefer vertical tracer-bullet slices over a horizontal "all tasks at once" pass 
 ## Phase 4 — Report
 
 Write `.agents/reports/{plan-name}-report.md` capturing: tasks completed, validation
-results, files changed, deviations from plan (with rationale), and tests written. Then
-archive the plan to `.agents/plans/completed/`.
+results, files changed, deviations from plan (with rationale), and tests written. Leave the
+plan in `.agents/plans/` — `/validate` archives it to `completed/` on a green gate. A plan is
+"completed" only once it passes validation, not when implementation ends, so archiving is
+Validate's job, not yours.
+
+**Norm — self-check before Phase 5 output.** This is a soft gate you honor, not a
+hook-enforced floor (the validate gate is the only hook-enforced floor; file existence here
+has no clean hook seam — see ADR-0009 for the distinction). Do not output Phase 5 until:
+- [ ] `.agents/reports/{plan-name}-report.md` exists
 
 If an Issue number was in the plan metadata, add a comment to the Issue (`gh issue comment {N}`)
 summarizing what shipped, the branch, file/test counts, and deviations. Do **not** change the
