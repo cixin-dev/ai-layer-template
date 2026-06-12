@@ -28,6 +28,27 @@ def trim_output(text: str) -> str:
     return result
 
 
+def resolve_tree(data: dict) -> "Path | None":
+    """Nearest ancestor of the payload cwd that contains .claude/validate.sh.
+
+    Walk stops at $HOME and filesystem root so ~/.claude is never mistaken for
+    a project root (retroactive: fix-validate-gate-worktree-cwd).
+    """
+    cwd = data.get("cwd")
+    if not cwd:
+        return None
+    start = Path(cwd)
+    if not start.is_dir():
+        return None
+    home = Path.home()
+    for candidate in (start, *start.parents):
+        if candidate == home or candidate == candidate.parent:
+            break
+        if (candidate / ".claude" / "validate.sh").is_file():
+            return candidate
+    return None
+
+
 def main() -> None:
     try:
         data: dict = json.load(sys.stdin)
@@ -38,15 +59,19 @@ def main() -> None:
     if data.get("stop_hook_active"):
         sys.exit(0)  # prevent infinite block loop
 
-    project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
-    if not project_dir:
-        print("[validate-gate] CLAUDE_PROJECT_DIR not set; skipping", file=sys.stderr)
-        sys.exit(0)
-
-    validate_sh = Path(project_dir) / ".claude" / "validate.sh"
-    if not validate_sh.is_file():
-        print(f"[validate-gate] no .claude/validate.sh in {project_dir}; skipping", file=sys.stderr)
-        sys.exit(0)
+    resolved = resolve_tree(data)
+    if resolved is not None:
+        project_dir = str(resolved)
+        validate_sh = resolved / ".claude" / "validate.sh"
+    else:
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
+        if not project_dir:
+            print("[validate-gate] CLAUDE_PROJECT_DIR not set; skipping", file=sys.stderr)
+            sys.exit(0)
+        validate_sh = Path(project_dir) / ".claude" / "validate.sh"
+        if not validate_sh.is_file():
+            print(f"[validate-gate] no .claude/validate.sh in {project_dir}; skipping", file=sys.stderr)
+            sys.exit(0)
 
     timeout = int(os.environ.get("VALIDATE_GATE_TIMEOUT", "120"))
     try:
