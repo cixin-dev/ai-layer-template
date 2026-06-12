@@ -217,6 +217,36 @@ echo "user content" > "$CLAUDE_HOME_DIR/commands/plan.md"
 SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$UNSYNC_SH" >/dev/null
 assert_file_exists "$CLAUDE_HOME_DIR/commands/plan.md" "test(i): real user file at owned path preserved"
 
+# --- Test (j): cross-mount — sync from REPO, unsync from REPO2 (different path, same .claude/ layout) ---
+setup_fixture
+REPO2="$TMPDIR_ROOT/repo2"
+mkdir -p "$REPO2/.claude/skills/piv-loop" \
+          "$REPO2/.claude/skills/system-evolution" \
+          "$REPO2/.claude/skills/tdd-gate" \
+          "$REPO2/.claude/commands" \
+          "$REPO2/.claude/hooks"
+touch "$REPO2/.claude/skills/piv-loop/SKILL.md" \
+      "$REPO2/.claude/skills/system-evolution/SKILL.md" \
+      "$REPO2/.claude/skills/tdd-gate/SKILL.md" \
+      "$REPO2/.claude/commands/plan.md" \
+      "$REPO2/.claude/commands/implement.md" \
+      "$REPO2/.claude/commands/retroactive.md" \
+      "$REPO2/.claude/commands/validate.md"
+echo '#!/usr/bin/env python3' > "$REPO2/.claude/hooks/validate_gate.py"
+echo '#!/usr/bin/env python3' > "$REPO2/.claude/hooks/security_guard.py"
+# Sync from REPO1, unsync from REPO2 — simulates NFS vs local checkout
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+SYNC_REPO_DIR="$REPO2" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$UNSYNC_SH" >/dev/null
+assert_file_not_exists "$CLAUDE_HOME_DIR/skills/piv-loop"         "test(j): piv-loop removed (cross-mount)"
+assert_file_not_exists "$CLAUDE_HOME_DIR/skills/system-evolution" "test(j): system-evolution removed (cross-mount)"
+assert_file_not_exists "$CLAUDE_HOME_DIR/skills/tdd-gate"         "test(j): tdd-gate removed (cross-mount)"
+assert_file_not_exists "$CLAUDE_HOME_DIR/commands/plan.md"        "test(j): plan.md removed (cross-mount)"
+assert_file_not_exists "$CLAUDE_HOME_DIR/commands/implement.md"   "test(j): implement.md removed (cross-mount)"
+assert_file_exists "$CLAUDE_HOME_DIR/skills/grill-with-docs" "test(j): grill-with-docs untouched (cross-mount)"
+assert_file_exists "$CLAUDE_HOME_DIR/skills/to-prd"          "test(j): to-prd untouched (cross-mount)"
+assert_file_exists "$CLAUDE_HOME_DIR/skills/grill-me"        "test(j): grill-me untouched (cross-mount)"
+assert_file_exists "$CLAUDE_HOME_DIR/skills/to-issues"       "test(j): to-issues untouched (cross-mount)"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
 else
