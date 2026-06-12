@@ -114,5 +114,6 @@ Fill these in per project. Keep it short.
 - **Verify commands**: [the project's lint / type-check / test / build commands]
 - **Architecture**: [e.g. vertical slices under `src/features/`; one folder owns a feature
   end-to-end so an agent reads one place, not every layer]
-- **Do-not**: [project-specific footguns the agent keeps hitting — add to this list
-  whenever a retroactive session finds one]
+- **Do-not**:
+  - Never commit directly to local `main` — main advances only by pulling merged PRs. Every change, including AI Layer / retroactive fixes to commands or this file, goes through a branch + PR. (A local-only main commit becomes a divergence after the next squash-merge — retroactive: fix-unsync-cross-mount.)
+  - Never skip Phase 4 of `/implement` — the report is the only durable record of what shipped, and the implementer must leave the plan in `.agents/plans/` for `/validate` to read; archiving to `completed/` is Validate's job on a green gate, not the implementer's (retroactive: fix-unsync-cross-mount).
