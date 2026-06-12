@@ -1,6 +1,6 @@
 ---
 description: Tear down a merged feature branch — pull main, remove worktree, delete local and remote branch
-argument-hint: <branch | PR# | blank to infer>
+argument-hint: <branch | PR# | blank to infer> [--discard]
 ---
 
 # Finish
@@ -22,7 +22,7 @@ Determine the branch name from `$ARGUMENTS`:
 
 ## Phase 2 — Hard gate: PR must be MERGED
 
-Run `gh pr list --head {branch} --json state,number,url --limit 1` to find the PR.
+Run `gh pr list --head {branch} --json state,number,url --limit 1 --state all` to find the PR.
 
 | State | Action |
 |-------|--------|
