@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 dir="$(dirname "$0")/../scripts"
-bash "$dir/sync.test.sh"
-bash "$dir/unsync.test.sh"
-bash "$dir/validate_gate.test.sh"
+bash "$dir/piv_check.sh"

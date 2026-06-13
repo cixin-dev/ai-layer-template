@@ -3,7 +3,7 @@ description: Tear down a merged feature branch — pull main, remove worktree, d
 argument-hint: <branch | PR# | blank to infer> [--discard]
 ---
 
-# Finish
+# Clean Worktree
 
 Tear down a feature branch after its PR has been merged. Runs from the **main repo root**
 (not from inside the feature worktree).
@@ -28,7 +28,7 @@ Run `gh pr list --head {branch} --json state,number,url --limit 1 --state all` t
 |-------|--------|
 | No PR found | STOP — "No PR found for branch {branch}. Nothing to clean up." |
 | OPEN | STOP — "PR #{N} is still OPEN. Get it reviewed and merged first." |
-| CLOSED (not merged) | STOP — "PR #{N} was closed without merging. If you want to discard the branch and worktree anyway, re-run as `/finish {branch} --discard`." Skip this check when `--discard` is present in `$ARGUMENTS`. |
+| CLOSED (not merged) | STOP — "PR #{N} was closed without merging. If you want to discard the branch and worktree anyway, re-run as `/clean-worktree {branch} --discard`." Skip this check when `--discard` is present in `$ARGUMENTS`. |
 | MERGED | Proceed |
 
 ## Phase 3 — Cleanup sequence

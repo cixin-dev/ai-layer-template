@@ -32,7 +32,7 @@ and fixing failures before proceeding.
 
 **Validate** — **Fresh session.** Run the full gate (`validate.sh` + the plan's E2E
 checklist), then hand to human review. Pass → push + open PR → merge → run
-`/finish {branch}`. Problem → deterministic handoff to
+`/clean-worktree {branch}`. Problem → deterministic handoff to
 [`/retroactive`](../system-evolution/SKILL.md) in a fresh session (the System Evolution
 trigger — workflow-routed, not a hook).
 → run `/validate <plan-path>`.
@@ -79,7 +79,7 @@ For each branch, in order:
    conflicts surface here.
 2. `/validate` — validates the *combined* state (the branch as it will actually land).
 3. PR → human merge.
-4. `/finish {branch}` — pulls main forward, removes the worktree.
+4. `/clean-worktree {branch}` — pulls main forward, removes the worktree.
 Then repeat for the next branch.
 
 The point of sync-before-validate: each branch is validated against the state it will

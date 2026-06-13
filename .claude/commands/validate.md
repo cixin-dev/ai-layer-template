@@ -39,7 +39,7 @@ Run the project's verify commands as listed in `CLAUDE.md → Verify commands` (
 **Overall** result.
 
 ```
-[PASS] bash scripts/sync.test.sh
+[PASS] bash .claude/validate.sh
 Overall: PASS
 ```
 
@@ -105,7 +105,7 @@ On PASS:
 worktree, address the comments, re-run `/validate` (which falls back to `completed/` for
 re-validation — the archive step is idempotent), then push the update with `git push`.
 
-**Successor**: after the PR merges, run `/finish {branch}` in a fresh session from the main
+**Successor**: after the PR merges, run `/clean-worktree {branch}` in a fresh session from the main
 repo to pull main up to date, remove the worktree, and delete the local and remote branch.
 
 When human review surfaces a **problem** (a bug that reached the codebase, a class of

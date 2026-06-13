@@ -129,5 +129,5 @@ Report branch, per-task validation results, files changed, deviations, and artif
 The next step is **`/validate <plan-path>`** in a fresh session (full gate + E2E + human
 review entry), then open a PR.
 
-After the PR merges, run **`/finish {branch}`** from the main repo to pull main up to date,
+After the PR merges, run **`/clean-worktree {branch}`** from the main repo to pull main up to date,
 remove the worktree, and delete the local and remote branch.
