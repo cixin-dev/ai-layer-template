@@ -34,6 +34,12 @@ if [ -z "$branch" ] || [ "$branch" = "$default_branch" ]; then
   exit 0
 fi
 
+# Retroactive branches follow the System Evolution workflow, not PIV — no plan phase.
+if [[ "$branch" == retroactive/* ]]; then
+  echo "PIV checks skipped (retroactive branch)."
+  exit 0
+fi
+
 # Resolve the base ref: prefer local, fall back to origin/.
 base_ref="$default_branch"
 if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
