@@ -37,17 +37,20 @@ Run these commands from the **main repo root**. If currently inside the feature 
 note that the user may need to `cd` to the main repo first, or the commands can be run with
 the main repo as the working directory.
 
-1. `git pull` — bring main up to date with the squash-merged commit.
-2. Find the worktree path:
+1. `git checkout {default_branch}` — ensure HEAD is on the default branch before pulling.
+   (Running from inside the feature branch is the common case; without this the pull targets
+   the already-deleted remote tracking ref and exits 1.)
+2. `git pull` — bring main up to date with the squash-merged commit.
+3. Find the worktree path:
    ```
    git worktree list --porcelain | grep -A2 "branch refs/heads/{branch}" | grep "worktree" | awk '{print $2}'
    ```
-   If no worktree path is found, skip steps 3–3b silently.
-3. **Rescue check** — before touching the worktree, check for unmerged commits:
+   If no worktree path is found, skip steps 4–4b silently.
+4. **Rescue check** — before touching the worktree, check for unmerged commits:
    ```
    git -C {path} log main..HEAD --oneline
    ```
-   - If the output is **empty**: proceed directly to step 3a.
+   - If the output is **empty**: proceed directly to step 4a.
    - If the output is **non-empty** (commits exist that are not in main): **STOP and report**:
      ```
      ⚠️  {branch} has {N} commit(s) not in main:
@@ -58,18 +61,18 @@ the main repo as the working directory.
      Do NOT push to main without explicit user instruction.
      ```
      Wait for the user to decide. Do not autonomously cherry-pick or push to main.
-3a. `git worktree remove {path}` — removes the directory and the worktree registration.
+4a. `git worktree remove {path}` — removes the directory and the worktree registration.
     If this fails with "contains modified or untracked files":
     - Run `git -C {path} status --short` and show the user what would be lost.
     - STOP and report: "Worktree has untracked/modified files (listed above). Re-run with
       `--discard` to force-remove them, or save them first."
     - Only use `--force` if `--discard` is present in `$ARGUMENTS`.
-3b. `git branch -D {branch}` — `-D` (force-delete) is required because squash-merge does not
+4b. `git branch -D {branch}` — `-D` (force-delete) is required because squash-merge does not
    create a merge commit on the feature branch; `-d` would fail with "not fully merged".
-4. `git worktree prune` — clean up any stale worktree references.
-5. `git push origin --delete {branch}` — if the remote branch is already gone (e.g.,
+5. `git worktree prune` — clean up any stale worktree references.
+6. `git push origin --delete {branch}` — if the remote branch is already gone (e.g.,
    `delete_branch_on_merge` removed it), print a note and continue rather than failing.
-6. `git fetch --prune` — sync remote-tracking refs.
+7. `git fetch --prune` — sync remote-tracking refs.
 
 ## Phase 4 — Confirm
 
