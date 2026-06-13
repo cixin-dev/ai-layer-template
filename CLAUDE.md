@@ -116,4 +116,5 @@ Fill these in per project. Keep it short.
   end-to-end so an agent reads one place, not every layer]
 - **Do-not**:
   - Never commit directly to local `main` — main advances only by pulling merged PRs. Every change, including AI Layer / retroactive fixes to commands or this file, goes through a branch + PR. (A local-only main commit becomes a divergence after the next squash-merge — retroactive: fix-unsync-cross-mount.)
+  - Never autonomously push to `main` as a side-effect of cleanup — if a worktree or branch holds commits not in main after a squash-merge, stop and surface options to the user (new branch + follow-up PR, or explicit discard). An agent that cherry-picks and pushes without asking is harder to audit than one that simply pauses. (retroactive: clean-worktree-unmerged-commits)
   - Never skip Phase 4 of `/implement` — the report is the only durable record of what shipped, and the implementer must leave the plan in `.agents/plans/` for `/validate` to read; archiving to `completed/` is Validate's job on a green gate, not the implementer's (retroactive: fix-unsync-cross-mount).
