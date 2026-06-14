@@ -97,8 +97,11 @@ Strong criteria let the agent loop independently; weak ones ("make it work") for
 clarification.
 
 **Verification-led.** Rate of feedback is your speed limit. Define how you'll verify work
-*before* doing it. Prefer test-driven, vertical tracer-bullet slices (one test → one
-implementation → repeat) over writing all tests up front. See
+*before* doing it. A claim about how a third-party or external component behaves when
+integrated (idempotent, compatible, side-effect-free) is not grounded until a probe has run
+it — assert it only after the experiment, never from docs or reasoning alone. Prefer
+test-driven, vertical tracer-bullet slices (one test → one implementation → repeat) over
+writing all tests up front. See
 [`.claude/skills/tdd-gate/SKILL.md`](.claude/skills/tdd-gate/SKILL.md) and
 [`examples/deep-module-pattern.md`](examples/deep-module-pattern.md).
 Each project bundles its verify commands into `.claude/validate.sh`; the global
