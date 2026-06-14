@@ -11,8 +11,11 @@ This is the **Plan** phase of the [PIV Loop](../skills/piv-loop/SKILL.md). Run i
 session. The output plan file is the only thing that crosses into the Implement phase, so
 it must stand on its own.
 
-**Core principle**: PLAN ONLY — no code written. Produce a document rich enough for a
-one-pass implementation by an agent that has never seen this conversation.
+**Core principle**: PLAN ONLY — no *deliverable* code written. Produce a document rich
+enough for a one-pass implementation by an agent that has never seen this conversation.
+Throwaway verification probes (a spike to confirm a dependency behaves as you claim, then
+discarded) are not "writing code" — they are how a finding earns the word *verified*. Run
+them during planning rather than letting Implement discover the surprise.
 
 **Order**: codebase first. The solution must fit existing patterns.
 
@@ -49,6 +52,11 @@ Delegate heavy codebase research to sub-agents so the main context stays in the 
 
 - Files to create vs. modify, and the dependency order between them.
 - Risks and their mitigations.
+- **Ground every external-behavior claim.** Any assertion that a third-party component
+  (plugin, library, API) behaves a certain way when integrated — idempotent, compatible,
+  side-effect-free — is an *assumption* until a probe has actually run it. Verify it now
+  with a throwaway spike (register/call it, build, observe), or carry it as an explicit
+  risk. Never launder reasoning-from-docs into the Summary as established fact.
 - The success criteria that will prove the feature works (these become the validation
   strategy, not an afterthought).
 
@@ -72,6 +80,17 @@ As a {user} I want to {action} so that {benefit}
 | Complexity | {LOW/MEDIUM/HIGH} |
 | Systems affected | {list} |
 | Issue | {#N or N/A} |
+
+## Assumptions & Risks
+List every load-bearing claim the plan rests on, especially how external/third-party
+components behave when integrated. A claim is **VERIFIED** only if you ran the experiment
+that proves it — cite the command and its result. Reasoning from docs or "it should…" is
+**ASSUMED**; carry it as a risk with how Implement de-risks it first. Do not state an
+ASSUMED claim as fact in the Summary.
+
+| Claim | VERIFIED / ASSUMED | Evidence (probe command + result) or mitigation |
+|-------|--------------------|--------------------------------------------------|
+| {e.g. "plugin X is idempotent with the existing url filter"} | {status} | {what you ran and saw, or the risk + first Implement step to confirm} |
 
 ## Patterns to Follow
 {For each: a real snippet with `// SOURCE: file:lines` so Implement can mirror it.}
@@ -97,6 +116,7 @@ Ordered, atomic, each independently verifiable.
 - [ ] All tasks completed
 - [ ] Checks pass with zero errors
 - [ ] Follows existing patterns
+- [ ] Every external-behavior claim is VERIFIED by a probe, or carried as an explicit risk
 - [ ] End-to-end behavior verified
 ```
 
