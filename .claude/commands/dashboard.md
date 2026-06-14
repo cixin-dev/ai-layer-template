@@ -1,5 +1,5 @@
 ---
-description: Show project development dashboard — open GitHub issues/PRs, PRDs not yet in tracker, and active worktree PIV phases
+description: Show project development dashboard — open GitHub issues/PRs, plans ready to implement, untracked designs, and active worktree PIV phases
 ---
 
 # Dashboard
@@ -36,15 +36,35 @@ For each worktree that is **not** the main repo root:
 
 ---
 
-## Phase 2 — Resolve untracked designs
+## Phase 2 — Resolve design linkage
 
-For each file found in Phase 1B (both PRDs and plans):
+For each file found in Phase 1B (both PRDs and plans), resolve its link to a GitHub issue, then
+classify it.
 
-1. Read the first 30 lines and extract any `#N` GitHub issue reference.
-2. Cross-reference against the open issue list from Phase 1A.
-3. Mark the file **untracked** when both conditions hold:
-   - No `#N` reference found in its header, **and**
-   - No open issue title contains the file's base filename (minus extension).
+**Find the linked issue (in priority order):**
+
+1. **Canonical metadata row.** Grep the *whole* file (not a fixed line window — the row can sit
+   below a long summary) for the `| Issue | {value} |` row that `/plan` emits. If the value is a
+   `#N` (not `N/A`), that `N` is the linked issue. This is the authoritative signal.
+2. **Title fallback** (only when the row is absent or `N/A`): match the file's H1 heading — minus a
+   leading `Plan: ` / `PRD` prefix — against the open issue titles (case-insensitive). A clear
+   match resolves the issue number.
+
+Do **not** match on the filename slug — plan slugs (`course-field-resolver-family`) rarely appear
+in the prose issue title ("Name the third Course-Field resolver…"), so filename matching produces
+false "untracked" verdicts. Ignore stray `#N` mentions elsewhere in the body (e.g. a
+"Cross-Issue Coordination (#29)" note) — only the canonical row or the H1 title resolves the link.
+
+**Classify each file:**
+
+| Condition | Bucket |
+|-----------|--------|
+| A `*.plan.md` whose linked issue is **open** | **Ready to Implement** — capture the issue #, its title, and the plan's repo-relative path |
+| Any file with **no** linked issue (no `#N` row, no title match) | **Untracked Designs** |
+| A file linked only to a **closed** issue | Omit — its work is already tracked/done |
+
+Only `*.plan.md` files are eligible for Ready to Implement — `/implement` operates on plan files;
+bare `.md` PRD/backlog drafts go to Untracked when unlinked.
 
 ---
 
@@ -67,9 +87,7 @@ If the branch name follows `feat/{N}-{slug}`, extract `{N}` as the linked Issue 
 Print this structure. Use `(none)` for empty sections.
 
 ```
-╔══════════════════════════════════════════════╗
-║           PROJECT DASHBOARD                  ║
-╚══════════════════════════════════════════════╝
+# 📊 Project Dashboard
 
 ## Open Issues (N)
 | #  | Title                  | Labels        | Assignee |
@@ -80,6 +98,12 @@ Print this structure. Use `(none)` for empty sections.
 | #  | Title                  | Branch               | Review   | Draft |
 |----|------------------------|----------------------|----------|-------|
 | 7  | ...                    | feat/42-...          | APPROVED | no    |
+
+## Ready to Implement (N)
+Plans in .agents/plans/ linked to an open issue, awaiting pickup:
+| Issue | Title                  | Run                                       |
+|-------|------------------------|-------------------------------------------|
+| #42   | ...                    | /implement .agents/plans/some.plan.md     |
 
 ## Untracked Designs
 Files in .agents/prds/ or .agents/plans/ (main, not completed/) with no linked GitHub issue:
@@ -92,4 +116,5 @@ Files in .agents/prds/ or .agents/plans/ (main, not completed/) with no linked G
 | ../ai-layer-template-feat42-.. | feat/42-some-feat   | #42   | IMPLEMENT |
 ```
 
-End with a one-line summary: total open issues, open PRs, untracked designs, and active worktrees.
+End with a one-line summary: total open issues, open PRs, plans ready to implement, untracked
+designs, and active worktrees.
