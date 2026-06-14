@@ -1,6 +1,7 @@
 ---
 description: Execute an implementation plan with per-task validation loops
 argument-hint: <path/to/plan.md>
+effort: xhigh
 ---
 
 # Implement

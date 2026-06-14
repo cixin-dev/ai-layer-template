@@ -1,6 +1,7 @@
 ---
 description: Create a context-rich implementation plan through codebase analysis (no code)
 argument-hint: <feature description | path/to/prd.md | issue number or URL>
+model: opus
 ---
 
 # Plan
