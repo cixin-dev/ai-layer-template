@@ -1,6 +1,6 @@
 # Graduation state lives in the live dial; `sync.sh` must not regress it
 
-**Status:** Superseded by ADR-0019 (2026-06-15). Extends ADR-0003 (global sync) and ADR-0007
+**Status:** Superseded by ADR-0020 (2026-06-15). Extends ADR-0003 (global sync) and ADR-0007
 (sync mechanics); informs the Unattended-Autonomy PRD. The graduation probe (Issue #26,
 2026-06-15) refuted this ADR's load-bearing premise. It did **not** find the contingency this
 ADR anticipated (a kept allow rule bypassing the classifier); it found something worse and more
@@ -8,7 +8,7 @@ general: in true `auto` mode the classifier itself returns `behavior=allow` for 
 main` *and* `git push --force origin main` (verdicts logged `mode=auto, behavior=allow`). The
 classifier is not a floor for dangerous push at all, so neither graduate-by-`allow` (this ADR)
 nor graduate-by-removal preserves protection. The deterministic dangerous-push floor must live in
-`security_guard.py`, independent of the permission layer; see ADR-0019. This ADR's one surviving
+`security_guard.py`, independent of the permission layer; see ADR-0020. This ADR's one surviving
 valid concern — *sync must not silently regress a deliberate graduation* — carries forward.
 
 ## Context

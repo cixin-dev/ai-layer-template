@@ -40,24 +40,24 @@ This finding is a deviation from the plan's assumptions (plan assumed project se
 - First comment (now corrected): https://github.com/cixin-dev/ai-layer-template/issues/26#issuecomment-4705939590
 - Correction comment with Probe 1+2 + revised NO-GO: https://github.com/cixin-dev/ai-layer-template/issues/26#issuecomment-4706126690
 
-### Task 5: Resolve ADR-0017 + create ADR-0019 ✅ (revised)
-- `docs/adr/0017-…md`: Status "Superseded by ADR-0019" with Probe-2 refutation cited.
-- `docs/adr/0019-dangerous-push-floor-in-hook-not-permission-layer.md`: created (renamed from the graduate-by-removal draft) — decides the deterministic dangerous-push floor in `security_guard.py`.
+### Task 5: Resolve ADR-0017 + create ADR-0020 ✅ (revised)
+- `docs/adr/0017-…md`: Status "Superseded by ADR-0020" with Probe-2 refutation cited.
+- `docs/adr/0020-dangerous-push-floor-in-hook-not-permission-layer.md`: created (renamed from the graduate-by-removal draft; numbered 0020 because `main` already carries an ADR-0019 from PR #31) — decides the deterministic dangerous-push floor in `security_guard.py`.
 
 ## Validation Results
 - No code gate (spike). Artifact validation:
   - `claude --version` → `2.1.177` ✅
   - Probes A/B/C(a) recorded (command + observation) on issue #26 ✅
   - Probe C(b): recorded with confound explanation and MOOT status given chosen mechanism ✅
-  - ADR-0017 status unambiguous (Superseded by ADR-0019) ✅
-  - ADR-0019 created and references back to ADR-0017/0018 ✅
+  - ADR-0017 status unambiguous (Superseded by ADR-0020) ✅
+  - ADR-0020 created and references back to ADR-0017/0018 ✅
   - Explicit go/no-go stated on issue #26 ✅
 
 ## Files Changed
 | File | Action |
 |------|--------|
 | `docs/adr/0017-graduation-state-lives-in-live-dial-sync-must-not-regress-it.md` | Updated Status line |
-| `docs/adr/0019-graduate-by-removal-not-by-allow.md` | Created |
+| `docs/adr/0020-dangerous-push-floor-in-hook-not-permission-layer.md` | Created |
 | `.agents/plans/spike-autonomy-probes.plan.md` | Seeded as first commit |
 | `.agents/reports/spike-autonomy-probes-report.md` | This report |
 
