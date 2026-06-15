@@ -204,8 +204,8 @@ clone (a worktree shares the repo's object store; it is neither).
 The line a sandbox's *outputs* must cross to become durable or irreversible — where
 verification moves from "trust the inside" to "gate the crossing". Two kinds of crossing are
 gated: session-end (the validate gate must be green) and irreversible side effects
-(`git push` on `ask`; recursive deletes and untrusted **opaque code execution** denied by
-`security_guard.py`). Actual data *exfiltration* is explicitly out of this hook's scope.
+(benign `git push` on `ask`; **dangerous push**, recursive deletes, and untrusted **opaque code
+execution** denied by `security_guard.py`). Actual data *exfiltration* is explicitly out of this hook's scope.
 Graduating `git push` from `ask` to `allow` is the single dial that opens the last boundary.
 _Avoid_: perimeter, firewall (those imply keeping things out; the boundary gates what the
 sandbox sends out).
@@ -222,3 +222,19 @@ and is out of scope.
 _Avoid_: fetch-and-execute (names only the network-fetch source, so it both under-describes the
 class and mislabels the local-substitution denials — superseded by this term); remote code
 execution (implies a remote attacker/foothold, not the local-opacity framing here).
+
+**dangerous push**:
+The subset of `git push` that is **denied** at the **boundary**, distinct from the benign
+`git push` that is merely gated on `ask`. Two forms: **force-push** (rewriting published
+history) and **push-to-default-branch** (clobbering `main`/`master`). The split is the core of
+ADR-0020: benign push is a *friction dial* that may be graduated `ask → allow`; dangerous push
+is a *deterministic floor* that must hold in **every** permission mode, so it lives in the
+`security_guard.py` deny hook, **not** the permission layer (a static allow rule or the auto-mode
+classifier — the classifier was probe-shown to approve both forms). The floor is bounded by what
+is **literal in the command string**: the safe lease family (`--force-with-lease` /
+`--force-if-includes`) to a non-default branch is allowed; the implicit bare `git push` and
+quoted/variable-expanded targets it cannot read are out of scope *by design* and stay on the
+benign `ask` backstop.
+_Avoid_: conflating with the benign `git push` checkpoint (that is the dial on `ask`; this is the
+floor on `deny` — they graduate independently); treating the auto-mode classifier as the floor
+(it is the probabilistic inner layer, not the deterministic one — ADR-0020).

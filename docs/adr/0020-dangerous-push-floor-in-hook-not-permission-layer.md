@@ -87,3 +87,15 @@ mechanism**, because dangerous pushes are blocked by the hook, not the permissio
   consistent with ADR-0018's own "probabilistic inner layer, deterministic outer floor."
 - A future reader tempted to "simplify" by trusting `auto` mode to gate force/main push should
   read Probe 2: the classifier logged `behavior=allow` for both. The hook is the floor.
+- **Scope of the floor (added 2026-06-16, #36 plan grilling):** "cannot be talked around" above
+  holds for the *string-detectable* dangerous-push forms, which is what the floor targets. A
+  string matcher cannot see a value that is not literal in the command (the same class CONTEXT.md
+  names *opaque code execution*), so three forms are out of the hook's reach **by design** and are
+  left to the `git push: ask` backstop: the implicit bare `git push` (upstream target not in the
+  string), quoted/variable-expanded tokens (`git push origin "main"`, `$BR`), and the fact that
+  `main`/`master` are matched by convention, not by querying the repo's real default. The
+  asymmetry where `git push origin main` denies but `git push origin "main"` does not is therefore
+  intentional, not a bug — chasing quoting variants is a losing game for a string matcher. What the
+  floor *does* cover, and must, includes global-option prefixes the agent emits naturally
+  (`git -C <path> push …`, `git -c k=v push …`, `git --no-pager push …`): the hook anchor is
+  `\bgit\b…\bpush\b`, not strict `git push` adjacency, precisely so these do not slip through.
