@@ -157,9 +157,10 @@ _Avoid_: "verify" as a second layer — there is no verify-vs-validate split (a 
 gate itself).
 
 **System Evolution**:
-The outer loop: when a bug slips through, fix the Harness (rules, commands, skills) so the
-class of problem can't recur — not just the surface code. The fix happens in a *retroactive
-session* — a fresh session that interrogates the AI Layer ("you let this reach the codebase;
+The outer loop: when a bug slips through, fix the Harness — first the deterministic gate (a
+check in `validate.sh` / the test suite), else its prose surface (rules, commands, skills) —
+so the class of problem can't recur, not just the surface code. The fix happens in a *retroactive
+session* — a fresh session that interrogates the Harness ("you let this reach the codebase;
 what rule/command/skill/template change stops the class?") rather than patching the symptom.
 Two layers, kept distinct: the **trigger** is mechanical and frequent — the workflow routes
 into `/retroactive` (PIV's Validate hands a *problem* off; a session that fixes a bug already
