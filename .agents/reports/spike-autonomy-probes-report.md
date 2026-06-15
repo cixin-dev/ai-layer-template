@@ -20,19 +20,29 @@ The probe put `defaultMode: "auto"` in project settings (`.claude/settings.json`
 
 This finding is a deviation from the plan's assumptions (plan assumed project settings could grant auto mode for probe purposes).
 
-### Task 3: Decide graduation mechanism ✅
-- **Graduate-by-removal chosen**
-- Rationale: C(b) unresolved + asymmetric downside (bypass risk). Graduate-by-removal avoids the risk entirely: no allow rule placed on git push, classifier default applies.
-- This is the "evidence-favored branch" from the plan, reached via the safety argument rather than a confirmed bypass observation.
+### Task 3: Decide graduation mechanism ✅ (revised after Probe 1+2)
+- **First pass**: chose graduate-by-removal on the assumption the classifier `soft_deny`s force/main push.
+- **Revised**: that assumption was doc-only (`auto-mode defaults`), never observed at runtime. Probe 2 (below) refuted it. Final decision: **dangerous-push floor lives in `security_guard.py`, not the permission layer**; benign `git push` ask checkpoint stays un-graduated until that floor ships.
+
+### Probe 1 (post-review, user-requested): user-scope `defaultMode:auto` ✅ VERIFIED GREEN
+- Reversible A/B test of `~/.claude/settings.json` (backed up, set `defaultMode:auto`, ran, restored byte-identical, backup removed).
+- project scope → `defaultMode "auto" ignored` WARN; user scope → no warning, `canEnterAuto=true`.
+- Confirms `sync.sh` → user scope is valid; project/local scope cannot grant auto mode.
+
+### Probe 2 (post-review, user-requested): classifier verdict on dangerous push 🔴 REFUTES floor
+- True auto mode, no allow rule (graduate-by-removal posture). Classifier genuinely ran (6.5s / 10.5s model calls).
+- `git push origin main` → debug log `Slow permission decision: 6551ms for Bash (mode=auto, behavior=allow)`; push landed.
+- `git push --force origin main` → `(mode=auto, behavior=allow)`; force-push landed.
+- Literal `behavior=allow` — not a swallowed soft_deny. Classifier is intent-aware; approves explicitly-instructed pushes.
+- Caveat: headless + explicit instruction; autonomous-never-instructed push not elicited.
 
 ### Task 4: Record on issue #26 ✅
-- Comment posted: https://github.com/cixin-dev/ai-layer-template/issues/26#issuecomment-4705939590
-- All probes A/B/C covered with command + observed result + rationale
-- Explicit go/no-go stated: **GO with graduate-by-removal**
+- First comment (now corrected): https://github.com/cixin-dev/ai-layer-template/issues/26#issuecomment-4705939590
+- Correction comment with Probe 1+2 + revised NO-GO: https://github.com/cixin-dev/ai-layer-template/issues/26#issuecomment-4706126690
 
-### Task 5: Resolve ADR-0017 + create ADR-0019 ✅
-- `docs/adr/0017-…md`: Status updated to "Superseded by ADR-0019 (2026-06-15)" with probe citation
-- `docs/adr/0019-graduate-by-removal-not-by-allow.md`: Created with full decision record
+### Task 5: Resolve ADR-0017 + create ADR-0019 ✅ (revised)
+- `docs/adr/0017-…md`: Status "Superseded by ADR-0019" with Probe-2 refutation cited.
+- `docs/adr/0019-dangerous-push-floor-in-hook-not-permission-layer.md`: created (renamed from the graduate-by-removal draft) — decides the deterministic dangerous-push floor in `security_guard.py`.
 
 ## Validation Results
 - No code gate (spike). Artifact validation:
@@ -57,8 +67,9 @@ None — spike; no production code in scope.
 ## Deviations from Plan
 | Deviation | Rationale |
 |-----------|-----------|
-| Probe C(b) not definitively resolved | Project settings cannot grant auto mode (newly discovered). Probe ran in default mode. C(b) rendered MOOT by choosing graduate-by-removal (no allow rule in graduation). |
-| C(b) classification: MOOT rather than confirmed-bypass | Could not observe true auto-mode permission-layer behavior. Graduate-by-removal is the safer choice regardless of C(b)'s resolution. |
+| Probe C(b) ("does a kept allow rule bypass the classifier?") never resolved — and made irrelevant | The real question was upstream of C(b): does the classifier gate dangerous push *at all*? Probe 2 showed it does not (`behavior=allow`). C(b)'s allow-vs-classifier distinction is moot when the classifier itself approves. |
+| Plan's binary decision tree (graduate-by-allow vs graduate-by-removal) had no correct branch | Both share the refuted premise. The spike's job ("decide graduation mechanism") expanded to "relocate the dangerous-push floor out of the permission layer." User consulted; chose record-NO-GO + deterministic-floor. |
+| Probe 1+2 added after initial Phase 4 | User-requested verification of `defaultMode:auto` activation surfaced the project-vs-user-scope constraint and, in turn, the classifier-not-a-floor finding. Verification-led course correction (CLAUDE.md: external-behavior claims need a probe, not docs). |
 
 ## Go/No-Go
-🟢 **GO** — Proceed to the settings/sync slice with graduate-by-removal graduation mechanism.
+🔴 **NO-GO (conditional)** — Do not ship graduation while dangerous push is gated only by the classifier or a static allow rule. **GO** once `security_guard.py` carries a probe-verified + tested dangerous-push floor (force-push + push-to-default-branch); until then `git push` stays on `ask`. Probe 1 confirms the auto-mode posture itself (user-scope `defaultMode:auto`) is sound.
