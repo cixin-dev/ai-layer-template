@@ -1,12 +1,12 @@
 # Graduation state lives in the live dial; `sync.sh` must not regress it
 
-**Status:** Extends ADR-0003 (global sync) and ADR-0007 (sync mechanics); informs the
-Unattended-Autonomy PRD. **Contingent on the graduation probe** (PRD Testing Decisions, third
-go/no-go): this ADR's "graduation = `git push` in live `allow`" model holds only if `auto` mode
-either drops a `Bash(git push *)` allow rule or still runs the classifier when it is present. If
-the probe shows a kept `allow` rule *bypasses* the classifier (leaving force/main push unguarded
-after graduation), this ADR is **superseded** by a graduate-by-removal model (delete the live
-`ask` entry so push falls to the classifier; graduation marker is not an allow/ask/deny entry).
+**Status:** Superseded by ADR-0019 (2026-06-15). Extends ADR-0003 (global sync) and ADR-0007
+(sync mechanics); informs the Unattended-Autonomy PRD. The graduation probe (Issue #26,
+2026-06-15) confirmed that `Bash(git push *)` allow rules are kept by auto mode (Probe C(a) =
+GREEN) but could not verify that the classifier still runs over a kept allow rule in true auto
+mode (C(b) unresolved due to project settings being unable to grant auto mode). Given the
+unresolved bypass risk, the safer graduate-by-removal model was chosen: graduation marker is not
+a permission entry; see ADR-0019.
 
 ## Context
 
