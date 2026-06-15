@@ -5,8 +5,11 @@ PreToolUse security guard hook.
 Denies:
   - Reading or writing real .env files (but not .env.example, .env.template, etc.)
   - Recursive deletes (rm -r/-rf/-fr, rmdir, find -delete, git clean -d)
-  - Untrusted fetch-and-execute (curl … | sh, wget … | bash, bare … | sh,
-    sh -c "$(…)" / backtick / eval command-substitution forms)
+  - Untrusted opaque code execution — code that isn't literal in the command, so no
+    human sees what will run when it is authored: pipe-to-shell (curl … | sh, wget …
+    | bash, bare … | sh) and command substitution (sh -c "$(…)" / backtick / eval).
+    Network fetch is only one source; bare command substitution (e.g.
+    eval "$(ssh-agent)") is denied too — see ADR-0019.
 
 Denials exit(2) with the reason on stderr. Per ADR-0016, only an exit(2) block is
 evaluated before the deny→ask→allow rule flow, so it overrides a matching allow rule
@@ -73,25 +76,25 @@ def check_recursive_delete(tool_name: str, tool_input: dict) -> str | None:
     return None
 
 
-REMOTE_EXEC_PATTERNS = [
+OPAQUE_EXEC_PATTERNS = [
     r"\|\s*(sudo\s+)?(sh|bash|zsh)\b",          # … | sh, curl … | sudo bash, wget … | bash (\b avoids | shasum)
     r"\b(sh|bash|zsh)\s+-c\b.*(\$\(|`)",        # sh -c "$(…)" / bash -c `…` command-substitution exec
     r"\beval\b.*(\$\(|`)",                       # eval "$(…)" / eval `…`
 ]
 
 
-def check_remote_exec(tool_name: str, tool_input: dict) -> str | None:
-    """Return a denial reason if untrusted fetch-and-execute is detected, else None."""
+def check_opaque_exec(tool_name: str, tool_input: dict) -> str | None:
+    """Return a denial reason if untrusted opaque code execution is detected, else None."""
     if tool_name != "Bash":
         return None
     command = tool_input.get("command", "")
     if not isinstance(command, str):
         return None
-    for pattern in REMOTE_EXEC_PATTERNS:
+    for pattern in OPAQUE_EXEC_PATTERNS:
         if re.search(pattern, command):
             return (
-                f"Blocked: untrusted fetch-and-execute detected in command: {command!r}. "
-                "Review and run it manually if you trust the source."
+                f"Blocked: untrusted opaque code execution detected in command: {command!r}. "
+                "Review and run it manually (e.g. `! …`) if you trust it."
             )
     return None
 
@@ -109,7 +112,7 @@ def main() -> None:
     reason = (
         check_env_file(tool_name, tool_input)
         or check_recursive_delete(tool_name, tool_input)
-        or check_remote_exec(tool_name, tool_input)
+        or check_opaque_exec(tool_name, tool_input)
     )
 
     if reason:
