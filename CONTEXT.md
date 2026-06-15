@@ -176,6 +176,24 @@ floors, handoffs carry semantic flow).
 The posture that lets N parallel agents run without per-tool-use approval: verify *outputs*
 at the boundary (the validate gate) rather than *inputs* (each tool call).
 
+The posture ships as a versioned, inert `.claude/settings.shared.json` that Claude Code does
+*not* auto-load; `sync.sh` additively merges it into live user-scope `~/.claude/settings.json`.
+- **Auto-approved**: the whole sandbox-internal toolchain — read / search / test / edit /
+  commit — via `permissions.defaultMode: auto`, with **no** hand-filled allowlist. The
+  safety-classifier model judges each action by intent; the absence of an allowlist *is* the
+  design (ADR-0018).
+- **Gated**: `git push` stays on `ask` — the single human checkpoint at the **boundary**;
+  **opaque code execution** is denied by `security_guard.py`; session-end is held by the
+  validate gate.
+- **Why**: verify *outputs* at the boundary, not *inputs* at each call. The classifier is the
+  probabilistic inner layer; the deterministic floor lives at the boundary — the validate gate
+  and the `security_guard.py` deny hook (ADR-0018, ADR-0020).
+- **Graduation** is the single dial (`ask` → `allow` for `git push`). The sync is
+  graduation-aware: it never re-adds a shared `ask` entry the live `allow` already covers, so a
+  resync can't silently spring the dial back (ADR-0017). Graduating `git push` is gated behind
+  the deterministic **dangerous push** floor in `security_guard.py` (ADR-0020 / Issue #36),
+  which must hold the force/main-push cases the auto-mode classifier was probe-shown to approve.
+
 **sandbox**:
 The pairing of a **worktree** (isolation container) **with** the synced auto-approve posture
 (`defaultMode: auto` — a safety-classifier model judges each action by intent) that lets its

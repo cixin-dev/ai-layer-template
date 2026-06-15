@@ -60,3 +60,12 @@ live-state fact.
 - The asymmetry is intentional and narrow — only `git push` (the boundary dial) is exempt.
   Other shared `ask`/`allow` entries are still blindly unioned; they carry no live-state meaning
   that a sync would wrongly overwrite.
+
+> **Correction (2026-06-16, settings/sync slice).** The surviving concern carried forward by
+> ADR-0020 — *sync must not silently regress a deliberate graduation* — is implemented as a
+> **general invariant, not a `git push`–specific conditional**: the merge never adds a shared
+> `ask` entry that the live `permissions.allow` already covers (for *any* entry, not just
+> `git push`). This is strictly safer and simpler than the narrow special-case framed above:
+> because Claude Code evaluates `ask` before `allow`, *any* already-graduated entry re-added to
+> `ask` would be silently un-graduated, so the invariant guards the whole set. The "only `git
+> push` is exempt / others blindly unioned" wording above is superseded by this general rule.

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "ask": [
+      "Bash(git push *)"
+    ]
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          { "type": "command", "command": "notify-send 'Claude Code' 'Permission needed'" }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          { "type": "command", "command": "notify-send 'Claude Code' 'Waiting for input'" }
+        ]
+      }
+    ]
+  }
+}

@@ -81,6 +81,34 @@ setup_fixture() {
   touch "$REPO/.claude/hooks/validate_gate.py"
   touch "$REPO/.claude/hooks/security_guard.py"
 
+  # Unattended-autonomy posture file (the additive merge input — mirrors the real repo).
+  cat > "$REPO/.claude/settings.shared.json" <<'JSON'
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "ask": [
+      "Bash(git push *)"
+    ]
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          { "type": "command", "command": "notify-send 'Claude Code' 'Permission needed'" }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          { "type": "command", "command": "notify-send 'Claude Code' 'Waiting for input'" }
+        ]
+      }
+    ]
+  }
+}
+JSON
+
   # Claude home fixture: upstream symlinks that must never be touched
   mkdir -p "$CLAUDE_HOME_DIR/skills"
   mkdir -p "$CLAUDE_HOME_DIR/commands"
@@ -266,6 +294,92 @@ open(path, "w").write(json.dumps(data, indent=2) + "\n")
 PYEOF
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
 assert_not_contains "$output" "would wire hook: Stop" "test(n): flat-format Stop entry recognized — no duplicate wired"
+
+# ============================================================================
+# settings.shared.json merge — additively merge the unattended-autonomy posture
+# (defaultMode: auto, git-push ask, two Notification matchers) into live settings.
+# ============================================================================
+
+# Seed a live settings.json with the given JSON (creates CLAUDE_HOME if absent).
+seed_live_settings() {
+  mkdir -p "$CLAUDE_HOME_DIR"
+  python3 - "$CLAUDE_HOME_DIR/settings.json" "$1" <<'PYEOF'
+import json, sys, pathlib
+pathlib.Path(sys.argv[1]).write_text(sys.argv[2])
+PYEOF
+}
+
+# --- Test (shared-a): fresh-fixture dry-run plans the whole posture ---
+setup_fixture
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_contains "$output" "would set defaultMode: auto"                  "test(shared-a): plans defaultMode auto"
+assert_contains "$output" "would add ask: Bash(git push *)"              "test(shared-a): plans git-push ask entry"
+assert_contains "$output" "would add Notification hook: permission_prompt" "test(shared-a): plans permission_prompt notification"
+assert_contains "$output" "would add Notification hook: idle_prompt"       "test(shared-a): plans idle_prompt notification"
+assert_not_contains "$output" "would add allow:"                         "test(shared-a): plans no toolchain allow entry"
+assert_file_not_exists "$CLAUDE_HOME_DIR/settings.json"                  "test(shared-a): dry-run creates no settings.json"
+
+# --- Test (shared-b): idempotent — after a real merge, a second dry-run plans nothing ---
+setup_fixture
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_not_contains "$output" "would set defaultMode"     "test(shared-b): idempotent defaultMode"
+assert_not_contains "$output" "would add ask"             "test(shared-b): idempotent ask"
+assert_not_contains "$output" "would add Notification hook" "test(shared-b): idempotent Notification"
+
+# --- Test (shared-c): preservation — existing allow + non-auto defaultMode survive ---
+setup_fixture
+seed_live_settings '{"permissions": {"defaultMode": "plan", "allow": ["Bash(gws drive:*)"]}}'
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH")"
+content="$(cat "$CLAUDE_HOME_DIR/settings.json")"
+assert_contains "$content" "Bash(gws drive:*)"      "test(shared-c): existing allow entry preserved"
+assert_contains "$content" '"defaultMode": "plan"'  "test(shared-c): non-auto defaultMode not overwritten"
+assert_contains "$output"  "not 'auto'"             "test(shared-c): non-auto defaultMode triggers warning"
+
+# --- Test (shared-d): loud no-op on ANY non-auto value (default AND plan) ---
+for mode in default plan; do
+  setup_fixture
+  seed_live_settings "{\"permissions\": {\"defaultMode\": \"$mode\"}}"
+  output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH")"
+  assert_contains "$output" "not 'auto'"   "test(shared-d/$mode): warning printed"
+  assert_contains "$output" "'$mode'"      "test(shared-d/$mode): warning names the live value"
+  content="$(cat "$CLAUDE_HOME_DIR/settings.json")"
+  assert_contains "$content" "\"defaultMode\": \"$mode\"" "test(shared-d/$mode): auto not applied"
+done
+
+# --- Test (shared-e): graduation survives — graduated git push not re-added to ask ---
+setup_fixture
+seed_live_settings '{"permissions": {"defaultMode": "auto", "allow": ["Bash(git push *)"]}}'
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_not_contains "$output" "would add ask: Bash(git push *)" "test(shared-e): graduated push not planned for ask"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+ask_has_push="$(python3 - "$CLAUDE_HOME_DIR/settings.json" <<'PYEOF'
+import json, sys
+data = json.loads(open(sys.argv[1]).read())
+ask = data.get("permissions", {}).get("ask", [])
+print("yes" if "Bash(git push *)" in ask else "no")
+PYEOF
+)"
+if [ "$ask_has_push" = "yes" ]; then
+  echo "FAIL: test(shared-e): git push re-added to ask despite live graduation"
+  FAILURES=$((FAILURES + 1))
+fi
+
+# --- Test (shared-f): fail-open + backup ---
+# (i) real run mutating an existing settings.json writes a .bak first
+setup_fixture
+seed_live_settings '{"permissions": {"defaultMode": "auto"}}'
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+assert_file_exists "$CLAUDE_HOME_DIR/settings.json.bak" "test(shared-f-i): .bak written before mutation"
+content="$(cat "$CLAUDE_HOME_DIR/settings.json")"
+assert_contains "$content" "Bash(git push *)" "test(shared-f-i): posture merged (mutation occurred)"
+# (ii) unparseable live settings.json → fail open (warn + exit 0) on real run, 'would' on dry-run
+setup_fixture
+printf 'not json' > "$CLAUDE_HOME_DIR/settings.json"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" 2>&1)" || true
+assert_contains "$output" "warn" "test(shared-f-ii): real run on unparseable settings warns (fail-open)"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run 2>&1)"
+assert_contains "$output" "would" "test(shared-f-ii): dry-run on unparseable settings prints would lines"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
