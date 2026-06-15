@@ -136,6 +136,44 @@ git -C "$REPO_G" commit -q -m "feat: implement without plan"
 output_g="$(cd "$REPO_G" && bash "$CHECK" 2>&1)" || true
 assert_fail_contains "$output_g" "plan file" "test(g): first commit not plan fails"
 
+# --- Test (j): prd/* branch (no plan) → skips (non-PIV Phase 1, by prefix) ---
+# Grill/strategic-planning output is non-PIV, like retroactive.
+REPO_J="$TMPDIR_ROOT/repo_j"
+make_repo "$REPO_J"
+git -C "$REPO_J" checkout -q -b prd/some-feature
+mkdir -p "$REPO_J/.agents/prds" "$REPO_J/docs/adr"
+echo "# prd" > "$REPO_J/.agents/prds/some-feature.prd.md"
+echo "# glossary" > "$REPO_J/CONTEXT.md"
+echo "# adr" > "$REPO_J/docs/adr/0001-some-decision.md"
+git -C "$REPO_J" add .agents/prds/ CONTEXT.md docs/adr/
+git -C "$REPO_J" commit -q -m "docs(prd): add PRD, glossary, ADR"
+output_j="$(cd "$REPO_J" && bash "$CHECK" 2>&1)"
+assert_skipped "$output_j" "test(j): prd/* branch skips"
+
+# --- Test (k): prd/* exempt by prefix even when it also touches machinery ---
+# This is the bootstrap case: the commit that adds the exemption itself edits
+# scripts/, yet must still be exempt.
+REPO_K="$TMPDIR_ROOT/repo_k"
+make_repo "$REPO_K"
+git -C "$REPO_K" checkout -q -b prd/some-feature
+mkdir -p "$REPO_K/.agents/prds" "$REPO_K/scripts"
+echo "# prd" > "$REPO_K/.agents/prds/some-feature.prd.md"
+echo "machinery" > "$REPO_K/scripts/piv_check.sh"
+git -C "$REPO_K" add .agents/prds/ scripts/
+git -C "$REPO_K" commit -q -m "docs(prd): prd plus harness fix"
+output_k="$(cd "$REPO_K" && bash "$CHECK" 2>&1)"
+assert_skipped "$output_k" "test(k): prd/* exempt by prefix despite machinery edit"
+
+# --- Test (l): align/* branch (CONTEXT.md only) → skips ---
+REPO_L="$TMPDIR_ROOT/repo_l"
+make_repo "$REPO_L"
+git -C "$REPO_L" checkout -q -b align/glossary
+echo "# glossary" > "$REPO_L/CONTEXT.md"
+git -C "$REPO_L" add CONTEXT.md
+git -C "$REPO_L" commit -q -m "docs(context): resolve terms"
+output_l="$(cd "$REPO_L" && bash "$CHECK" 2>&1)"
+assert_skipped "$output_l" "test(l): align/* branch skips"
+
 # --- Test (h): not a git repo → skips (fail open) ---
 BARE_H="$TMPDIR_ROOT/bare_h"
 mkdir -p "$BARE_H"

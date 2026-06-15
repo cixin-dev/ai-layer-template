@@ -34,11 +34,18 @@ if [ -z "$branch" ] || [ "$branch" = "$default_branch" ]; then
   exit 0
 fi
 
-# Retroactive branches follow the System Evolution workflow, not PIV — no plan phase.
-if [[ "$branch" == retroactive/* ]]; then
-  echo "PIV checks skipped (retroactive branch)."
-  exit 0
-fi
+# Non-PIV branches have no plan phase and are identified by prefix:
+#   retroactive/*       — System Evolution (outer loop)
+#   prd/* , align/*     — Phase 1 Strategic Planning / Alignment (PRDs, glossary
+#                         CONTEXT.md, ADRs, grill-with-docs output)
+# Prefix-based (not diff-based) so a Phase-1 branch that also touches harness
+# machinery — e.g. the commit that adds this very exemption — is still exempt.
+case "$branch" in
+  retroactive/*|prd/*|align/*)
+    echo "PIV checks skipped (non-PIV branch: $branch)."
+    exit 0
+    ;;
+esac
 
 # Resolve the base ref: prefer local, fall back to origin/.
 base_ref="$default_branch"
