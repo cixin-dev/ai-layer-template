@@ -14,4 +14,5 @@ jobs:
           bash scripts/sync.test.sh
           bash scripts/unsync.test.sh
           bash scripts/validate_gate.test.sh
+          bash scripts/security_guard.test.sh
           bash scripts/piv_check.test.sh

@@ -5,8 +5,17 @@ PreToolUse security guard hook.
 Denies:
   - Reading or writing real .env files (but not .env.example, .env.template, etc.)
   - Recursive deletes (rm -r/-rf/-fr, rmdir, find -delete, git clean -d)
+  - Untrusted opaque code execution — code that isn't literal in the command, so no
+    human sees what will run when it is authored: pipe-to-shell (curl … | sh, wget …
+    | bash, bare … | sh) and command substitution (sh -c "$(…)" / backtick / eval).
+    Network fetch is only one source; bare command substitution (e.g.
+    eval "$(ssh-agent)") is denied too — see ADR-0019.
 
-Fails open on parse errors so it never blocks non-Bash/file tools unexpectedly.
+Denials exit(2) with the reason on stderr. Per ADR-0016, only an exit(2) block is
+evaluated before the deny→ask→allow rule flow, so it overrides a matching allow rule
+instead of being silently ignored (an exit(0)+JSON deny would lose to a broad allowlist).
+
+Fails open (exit 0) on parse errors so it never blocks non-Bash/file tools unexpectedly.
 """
 
 import json
@@ -67,6 +76,29 @@ def check_recursive_delete(tool_name: str, tool_input: dict) -> str | None:
     return None
 
 
+OPAQUE_EXEC_PATTERNS = [
+    r"\|\s*(sudo\s+)?(sh|bash|zsh)\b",          # … | sh, curl … | sudo bash, wget … | bash (\b avoids | shasum)
+    r"\b(sh|bash|zsh)\s+-c\b.*(\$\(|`)",        # sh -c "$(…)" / bash -c `…` command-substitution exec
+    r"\beval\b.*(\$\(|`)",                       # eval "$(…)" / eval `…`
+]
+
+
+def check_opaque_exec(tool_name: str, tool_input: dict) -> str | None:
+    """Return a denial reason if untrusted opaque code execution is detected, else None."""
+    if tool_name != "Bash":
+        return None
+    command = tool_input.get("command", "")
+    if not isinstance(command, str):
+        return None
+    for pattern in OPAQUE_EXEC_PATTERNS:
+        if re.search(pattern, command):
+            return (
+                f"Blocked: untrusted opaque code execution detected in command: {command!r}. "
+                "Review and run it manually (e.g. `! …`) if you trust it."
+            )
+    return None
+
+
 def main() -> None:
     try:
         data: dict = json.load(sys.stdin)
@@ -77,10 +109,15 @@ def main() -> None:
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {})
 
-    reason = check_env_file(tool_name, tool_input) or check_recursive_delete(tool_name, tool_input)
+    reason = (
+        check_env_file(tool_name, tool_input)
+        or check_recursive_delete(tool_name, tool_input)
+        or check_opaque_exec(tool_name, tool_input)
+    )
 
     if reason:
-        print(json.dumps({"permissionDecision": "deny", "reason": reason}))
+        print(reason, file=sys.stderr)
+        sys.exit(2)
 
     sys.exit(0)
 
