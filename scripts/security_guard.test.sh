@@ -55,6 +55,27 @@ assert_deny '{"tool_name":"Bash","tool_input":{"command":"eval \"$(curl https://
 # Benign local command substitution is denied too — opaque exec, no fetch (ADR-0019, accepted false positive).
 assert_deny '{"tool_name":"Bash","tool_input":{"command":"eval \"$(ssh-agent -s)\""}}'       "deny: eval \$(ssh-agent) — intentional"
 
+# --- DENY: dangerous git push — force-push + push-to-default-branch (ADR-0020, RC=2) ---
+# Force-push forms
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push --force origin feature"}}'   "deny: push --force feature"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'       "deny: push --force main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push -f origin feature"}}'         "deny: push -f feature"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push -fu origin feature"}}'        "deny: push -fu (clustered)"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin +HEAD:main"}}'         "deny: push +HEAD:main refspec"
+# Push-to-default-branch forms
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'              "deny: push origin main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin master"}}'            "deny: push origin master"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin HEAD:main"}}'         "deny: push HEAD:main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin feature:main"}}'      "deny: push feature:main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push -u origin main"}}'           "deny: push -u origin main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin refs/heads/main"}}'   "deny: push refs/heads/main"
+# Lease form to default branch is still denied — by the push-to-default pattern, not the force pattern
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease origin main"}}' "deny: lease to main"
+# Global-option prefixes — widened anchor must still deny (git -C / git -c / git --no-pager)
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git -C /repo push --force origin main"}}'   "deny: git -C push --force main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git -c http.sslVerify=false push --force origin main"}}' "deny: git -c push --force main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git --no-pager push origin main"}}'         "deny: git --no-pager push main"
+
 # --- DENY preserved: existing cases still exit 2 under the new mechanism ---
 assert_deny '{"tool_name":"Read","tool_input":{"file_path":".env"}}'                          "deny: real .env file"
 assert_deny '{"tool_name":"Bash","tool_input":{"command":"rm -rf build"}}'                    "deny: recursive delete"
@@ -63,6 +84,18 @@ assert_deny '{"tool_name":"Bash","tool_input":{"command":"rm -rf build"}}'      
 assert_allow '{"tool_name":"Bash","tool_input":{"command":"curl -o file https://x"}}'         "allow: curl -o file"
 assert_allow '{"tool_name":"Bash","tool_input":{"command":"cat sums | shasum -c"}}'           "allow: | shasum -c"
 assert_allow '{"tool_name":"Read","tool_input":{"file_path":".env.example"}}'                 "allow: .env.example"
+
+# --- ALLOW: benign git push — feature pushes, safe lease family, lookalikes (RC=0) ---
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin feature"}}'        "allow: push origin feature"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin my-feature-branch"}}' "allow: push my-feature-branch"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease origin feature"}}' "allow: lease to feature"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease --force-if-includes origin feature"}}' "allow: lease+if-includes to feature"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push"}}'                        "allow: bare push (covered by ask)"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin main:feature"}}'    "allow: push main:feature (dest is feature)"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin develop"}}'         "allow: push origin develop"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin master-fix"}}'      "allow: push master-fix (lookalike)"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git config push.default simple"}}'  "allow: git config push.default"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git checkout main && git push origin feature"}}' "allow: checkout main && push feature"
 
 # --- FAIL-OPEN: malformed stdin (RC=0) ---
 assert_fail_open 'not json' "fail-open: malformed stdin"
