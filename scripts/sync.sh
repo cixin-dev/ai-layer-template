@@ -140,24 +140,35 @@ fi
 SETTINGS="$CLAUDE_DIR/settings.json"
 SG_CMD="python3 \"$CLAUDE_DIR/hooks/security_guard.py\""
 VG_CMD="python3 \"$CLAUDE_DIR/hooks/validate_gate.py\""
+# The versioned unattended-autonomy posture, additively merged into live settings.
+SHARED_SETTINGS="$REPO_DIR/.claude/settings.shared.json"
 
 if ! command -v python3 >/dev/null 2>&1; then
   if [ "$DRY_RUN" -eq 1 ]; then
     note "would wire hook: PreToolUse -> security_guard.py"
     note "would wire hook: Stop -> validate_gate.py"
+    note "would set defaultMode: auto"
+    note "would add ask: Bash(git push *)"
+    note "would add Notification hook: permission_prompt"
+    note "would add Notification hook: idle_prompt"
   else
     note "warn: python3 not found — wire hooks manually by adding to $SETTINGS:"
     note "  PreToolUse: $SG_CMD"
     note "  Stop: $VG_CMD"
+    note "  permissions.defaultMode: auto"
+    note "  permissions.ask: Bash(git push *)"
+    note "  hooks.Notification[permission_prompt]: notify-send 'Claude Code' 'Permission needed'"
+    note "  hooks.Notification[idle_prompt]: notify-send 'Claude Code' 'Waiting for input'"
   fi
 else
-  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" <<'PYEOF'
+  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$SHARED_SETTINGS" <<'PYEOF'
 import json, sys, shutil, pathlib
 
 settings_path = pathlib.Path(sys.argv[1])
 sg_cmd = sys.argv[2]
 vg_cmd = sys.argv[3]
 dry_run = sys.argv[4] == "1"
+shared_path = pathlib.Path(sys.argv[5])
 
 try:
     data = json.loads(settings_path.read_text()) if settings_path.exists() else {}
@@ -171,6 +182,9 @@ except Exception as e:
         print(f"[sync]   PreToolUse: {sg_cmd}", flush=True)
         print(f"[sync]   Stop: {vg_cmd}", flush=True)
     sys.exit(0)
+
+# The versioned posture file is repo-controlled; an absent file means "no posture".
+shared = json.loads(shared_path.read_text()) if shared_path.exists() else {}
 
 hooks = data.get("hooks", {})
 
@@ -197,11 +211,53 @@ needs_stop = not any(
     for b in stop_list
 )
 
+# --- Unattended-autonomy posture deltas (from settings.shared.json) ---
+shared_perms = shared.get("permissions", {})
+shared_default = shared_perms.get("defaultMode")
+shared_ask = shared_perms.get("ask", [])
+shared_allow = shared_perms.get("allow", [])
+shared_notifs = [b for b in shared.get("hooks", {}).get("Notification", []) if isinstance(b, dict)]
+
+live_perms = data.get("permissions", {})
+live_default = live_perms.get("defaultMode")
+live_ask = live_perms.get("ask", [])
+live_allow = live_perms.get("allow", [])
+
+# defaultMode: set only when live has none; warn loudly on ANY non-matching live value
+# (the posture silently no-ops under any non-'auto' mode — see grill 2026-06-16).
+set_default = shared_default is not None and live_default is None
+warn_default = live_default if (shared_default is not None and live_default not in (None, shared_default)) else None
+
+# ask union, graduation-aware: skip an entry the live allow already covers (ADR-0017's
+# general invariant) or that live ask already holds.
+ask_to_add = [a for a in shared_ask if a not in live_allow and a not in live_ask]
+# allow union: preserve-only — add shared allow entries not already live, never remove.
+allow_to_add = [a for a in shared_allow if a not in live_allow]
+# Notification hooks: dedupe by matcher (command text is cosmetic — grill 2026-06-16).
+live_notif_matchers = {
+    b.get("matcher") for b in data.get("hooks", {}).get("Notification", []) if isinstance(b, dict)
+}
+notifs_to_add = [b for b in shared_notifs if b.get("matcher") not in live_notif_matchers]
+
+needs_posture = set_default or bool(ask_to_add) or bool(allow_to_add) or bool(notifs_to_add)
+
+# The loud no-op warning fires in both dry-run and real run, ungated by needs_*.
+if warn_default is not None:
+    print(f"[sync] ⚠ defaultMode is '{warn_default}', not '{shared_default}' — autonomy posture inactive", flush=True)
+
 if dry_run:
     if needs_pre:
         print(f"[sync] would wire hook: PreToolUse -> security_guard.py", flush=True)
     if needs_stop:
         print(f"[sync] would wire hook: Stop -> validate_gate.py", flush=True)
+    if set_default:
+        print(f"[sync] would set defaultMode: {shared_default}", flush=True)
+    for a in ask_to_add:
+        print(f"[sync] would add ask: {a}", flush=True)
+    for a in allow_to_add:
+        print(f"[sync] would add allow: {a}", flush=True)
+    for b in notifs_to_add:
+        print(f"[sync] would add Notification hook: {b.get('matcher')}", flush=True)
 else:
     if needs_pre:
         hooks_section = data.setdefault("hooks", {})
@@ -216,8 +272,18 @@ else:
     if needs_stop:
         hooks_section = data.setdefault("hooks", {})
         hooks_section.setdefault("Stop", []).append({"hooks": [vg_entry]})
+    if needs_posture:
+        perms = data.setdefault("permissions", {})
+        if set_default:
+            perms["defaultMode"] = shared_default
+        if ask_to_add:
+            perms.setdefault("ask", []).extend(ask_to_add)
+        if allow_to_add:
+            perms.setdefault("allow", []).extend(allow_to_add)
+        if notifs_to_add:
+            data.setdefault("hooks", {}).setdefault("Notification", []).extend(notifs_to_add)
 
-    if needs_pre or needs_stop:
+    if needs_pre or needs_stop or needs_posture:
         bak_path = pathlib.Path(str(settings_path) + ".bak")
         if settings_path.exists() and not bak_path.exists():
             shutil.copy2(settings_path, bak_path)
@@ -226,5 +292,13 @@ else:
             print(f"[sync] wired hook: PreToolUse -> security_guard.py", flush=True)
         if needs_stop:
             print(f"[sync] wired hook: Stop -> validate_gate.py", flush=True)
+        if set_default:
+            print(f"[sync] set defaultMode: {shared_default}", flush=True)
+        for a in ask_to_add:
+            print(f"[sync] added ask: {a}", flush=True)
+        for a in allow_to_add:
+            print(f"[sync] added allow: {a}", flush=True)
+        for b in notifs_to_add:
+            print(f"[sync] added Notification hook: {b.get('matcher')}", flush=True)
 PYEOF
 fi
