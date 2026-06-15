@@ -174,6 +174,28 @@ git -C "$REPO_L" commit -q -m "docs(context): resolve terms"
 output_l="$(cd "$REPO_L" && bash "$CHECK" 2>&1)"
 assert_skipped "$output_l" "test(l): align/* branch skips"
 
+# --- Test (m): chore/* branch (no plan) → skips (maintenance, by prefix) ---
+# Archiving completed designs / dep bumps have no plan/implement/validate cycle.
+REPO_M="$TMPDIR_ROOT/repo_m"
+make_repo "$REPO_M"
+git -C "$REPO_M" checkout -q -b chore/archive-completed-designs
+mkdir -p "$REPO_M/.agents/plans/completed"
+echo "# plan" > "$REPO_M/.agents/plans/completed/old-feature.plan.md"
+git -C "$REPO_M" add .agents/plans/completed/
+git -C "$REPO_M" commit -q -m "chore(designs): archive completed plan"
+output_m="$(cd "$REPO_M" && bash "$CHECK" 2>&1)"
+assert_skipped "$output_m" "test(m): chore/* branch skips"
+
+# --- Test (n): docs/* branch (no plan) → skips (doc edits, by prefix) ---
+REPO_N="$TMPDIR_ROOT/repo_n"
+make_repo "$REPO_N"
+git -C "$REPO_N" checkout -q -b docs/fix-readme
+echo "# readme" > "$REPO_N/README.md"
+git -C "$REPO_N" add README.md
+git -C "$REPO_N" commit -q -m "docs: clarify readme"
+output_n="$(cd "$REPO_N" && bash "$CHECK" 2>&1)"
+assert_skipped "$output_n" "test(n): docs/* branch skips"
+
 # --- Test (h): not a git repo → skips (fail open) ---
 BARE_H="$TMPDIR_ROOT/bare_h"
 mkdir -p "$BARE_H"
