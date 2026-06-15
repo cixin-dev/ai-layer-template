@@ -38,10 +38,12 @@ fi
 #   retroactive/*       — System Evolution (outer loop)
 #   prd/* , align/*     — Phase 1 Strategic Planning / Alignment (PRDs, glossary
 #                         CONTEXT.md, ADRs, grill-with-docs output)
+#   chore/* , docs/*    — maintenance (archiving completed designs, dep bumps,
+#                         doc edits) — no plan/implement/validate cycle to gate
 # Prefix-based (not diff-based) so a Phase-1 branch that also touches harness
 # machinery — e.g. the commit that adds this very exemption — is still exempt.
 case "$branch" in
-  retroactive/*|prd/*|align/*)
+  retroactive/*|prd/*|align/*|chore/*|docs/*)
     echo "PIV checks skipped (non-PIV branch: $branch)."
     exit 0
     ;;
