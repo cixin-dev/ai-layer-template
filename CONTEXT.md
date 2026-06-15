@@ -157,9 +157,10 @@ _Avoid_: "verify" as a second layer — there is no verify-vs-validate split (a 
 gate itself).
 
 **System Evolution**:
-The outer loop: when a bug slips through, fix the Harness (rules, commands, skills) so the
-class of problem can't recur — not just the surface code. The fix happens in a *retroactive
-session* — a fresh session that interrogates the AI Layer ("you let this reach the codebase;
+The outer loop: when a bug slips through, fix the Harness — first the deterministic gate (a
+check in `validate.sh` / the test suite), else its prose surface (rules, commands, skills) —
+so the class of problem can't recur, not just the surface code. The fix happens in a *retroactive
+session* — a fresh session that interrogates the Harness ("you let this reach the codebase;
 what rule/command/skill/template change stops the class?") rather than patching the symptom.
 Two layers, kept distinct: the **trigger** is mechanical and frequent — the workflow routes
 into `/retroactive` (PIV's Validate hands a *problem* off; a session that fixes a bug already
@@ -180,7 +181,7 @@ The pairing of a **worktree** (isolation container) **with** the synced auto-app
 (`defaultMode: auto` — a safety-classifier model judges each action by intent) that lets its
 internal operations — read / search / test / edit / commit — run without per-tool-use prompts.
 Safety comes from the **boundary**, not the directory wall: the validate gate guards session-end
-and irreversible or untrusted operations (`git push`, recursive delete, fetch-and-execute) are
+and irreversible or untrusted operations (`git push`, recursive delete, opaque code execution) are
 separately gated. The classifier is the *probabilistic* inner layer; the deterministic floor lives
 at the boundary (the validate gate, the `security_guard.py` deny hook).
 **Asymmetric by construction**: the posture is synced at *user scope* (global), so it outlives
@@ -203,8 +204,21 @@ clone (a worktree shares the repo's object store; it is neither).
 The line a sandbox's *outputs* must cross to become durable or irreversible — where
 verification moves from "trust the inside" to "gate the crossing". Two kinds of crossing are
 gated: session-end (the validate gate must be green) and irreversible side effects
-(`git push` on `ask`; recursive deletes and untrusted fetch-and-execute denied by
+(`git push` on `ask`; recursive deletes and untrusted **opaque code execution** denied by
 `security_guard.py`). Actual data *exfiltration* is explicitly out of this hook's scope.
 Graduating `git push` from `ask` to `allow` is the single dial that opens the last boundary.
 _Avoid_: perimeter, firewall (those imply keeping things out; the boundary gates what the
 sandbox sends out).
+
+**opaque code execution**:
+The class of command `security_guard.py` denies under the **boundary**: a command whose
+real payload is **not literal in the command**, so no human sees what will actually run when
+it is authored. Two mechanisms: **pipe-to-shell** (`curl … | sh`, `wget … | bash`, bare
+`… | sh`) and **command substitution into a shell** (`sh -c "$(…)"` / backtick / `eval "$(…)"`).
+Network fetch is only *one* source of the payload — bare local substitution (e.g.
+`eval "$(ssh-agent)"`) is denied too, a deliberately accepted false positive (ADR-0019); the
+threat is the *opacity*, not the fetch. Distinct from `exfiltration`, which is data going *out*
+and is out of scope.
+_Avoid_: fetch-and-execute (names only the network-fetch source, so it both under-describes the
+class and mislabels the local-substitution denials — superseded by this term); remote code
+execution (implies a remote attacker/foothold, not the local-opacity framing here).

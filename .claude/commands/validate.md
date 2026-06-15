@@ -66,12 +66,26 @@ Overall: PASS / FAIL
 
 - **PASS**: archive the plan with
   `git mv .agents/plans/{slug}.plan.md .agents/plans/completed/{slug}.plan.md`
-  then commit on the branch:
-  `git commit -m "docs(plan): archive {slug} plan on green gate"`.
-  This is the point a plan becomes "completed" (a green gate, not implementation's end);
-  the squash-merge carries `completed/{slug}.plan.md` into main. If the plan was already
-  resolved from `completed/` (a re-validation), it is already archived — skip the move.
-  Then the tree is ready for human review → merge.
+  then commit on the branch **with the Phase 4 result block in the commit body**, so the
+  archive carries verifiable evidence it was a Validate-session pass. The subject line alone
+  cannot distinguish a legitimate archive from an implementer self-archiving in the implement
+  flow (both read "archive … on green gate"); the embedded gate/E2E results can — a reviewer
+  reads them straight from `git log`, and a bare subject with no block is now the smell.
+  ```
+  git commit -m "docs(plan): archive {slug} plan on green gate" -m "$(cat <<'EOF'
+  Validate session result:
+  Gate:    PASS  (bash .claude/validate.sh)
+  E2E:     PASS  /  SKIPPED (no plan E2E section)
+  Overall: PASS
+  EOF
+  )"
+  ```
+  Fill the block with the **actual** Phase 4 results, never a template — a fabricated PASS is
+  now a visible lie in the history, not an ambiguous default. This is the point a plan becomes
+  "completed" (a green gate, not implementation's end); the squash-merge carries
+  `completed/{slug}.plan.md` into main. If the plan was already resolved from `completed/`
+  (a re-validation), it is already archived — skip the move. Then the tree is ready for human
+  review → merge.
 - **FAIL**: list every failing check with its error. Fix, re-run, achieve PASS before
   declaring done. Leave the plan in `.agents/plans/` — a failing gate is not "completed".
 
