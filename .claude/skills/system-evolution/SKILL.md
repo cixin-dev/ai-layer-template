@@ -28,7 +28,12 @@ Frame it bluntly:
 > "You let this problem reach the codebase. Look at your AI Layer — rules, commands,
 > skills, workflow — and find what we can change so this class of problem can't recur."
 
-Then check four dimensions, earliest-in-the-workflow first:
+First ask: **is the defect mechanically checkable** (a lint rule, type check, test case, or grep
+assertion)? If yes, add the check to `.claude/validate.sh` or the test suite — the Stop hook
+(ADR-0009) catches the class deterministically, which always beats a prose rule.
+
+Only if no (judgment-shaped defects that can't become a green/red check), fall back to the four
+prose dimensions, earliest-in-the-workflow first:
 
 1. **Commands** — is the procedure missing a step?
 2. **On-demand context** — do `examples/` or referenced docs need updating?

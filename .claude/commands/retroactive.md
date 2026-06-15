@@ -34,7 +34,14 @@ Frame the session this way:
 
 ## Phase 2 — Locate the gap
 
-Check the four AI Layer dimensions, in order:
+**Dimension 0 — Is the defect mechanically checkable?** Ask first: can this be expressed as a
+lint rule, type check, test case, or grep assertion that returns green or red? If yes, add the
+check to `.claude/validate.sh` or the project test suite so the Stop hook (ADR-0009) catches
+the whole class next time — a deterministic check always beats a prose rule. Only if no (the
+defect requires design judgment or a human eye and cannot become a green/red check) fall through
+to the four prose dimensions below.
+
+Check the four AI Layer prose dimensions, in order:
 
 1. **Commands** — was the procedure missing a step? (e.g. the implement flow never ran a
    check that would have caught this)
@@ -49,8 +56,9 @@ Check the four AI Layer dimensions, in order:
 
 State the smallest change to the AI Layer that prevents the whole class of problem. Prefer
 sharpening an existing rule/command over adding new surface area — the AI Layer must stay
-lean enough to live in the smart zone. If two layers could hold the fix, pick the earliest
-one in the workflow (a planning-template fix beats a validation-step fix).
+lean enough to live in the smart zone. For prose fixes (Dimension 0 said no), if two layers
+could hold the fix, pick the earliest one in the workflow (a planning-template fix beats a
+validation-step fix).
 
 ## Phase 4 — Apply and record
 
