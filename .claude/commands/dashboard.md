@@ -1,5 +1,5 @@
 ---
-description: Show project development dashboard — open GitHub issues/PRs, plans ready to implement, untracked designs, and active worktree PIV phases
+description: Show project development dashboard — open GitHub issues/PRs, plans ready to implement, untracked designs, and active worktree PIV phases with validate verdicts
 ---
 
 # Dashboard
@@ -80,6 +80,23 @@ For each active worktree (non-main):
 
 If the branch name follows `feat/{N}-{slug}`, extract `{N}` as the linked Issue number.
 
+**Resolve the Validate verdict.** The phase above is inferred from file presence — a report
+existing does *not* mean `/validate` ran or passed. Since the plan-archive commit now embeds an
+auditable result block (see `chore(validate): embed gate/E2E result block`), read the real verdict
+from that worktree's git log:
+
+```bash
+git -C {worktree-path} log -1 --grep='plan on green gate' --format='%B'
+```
+
+The archive commit body carries an `Overall:` line. Map it to the Validate column:
+
+| Archive commit | Validate |
+|----------------|----------|
+| Found, `Overall: PASS` | `✅ PASS` |
+| Found, `Overall:` present but not `PASS` | `❌ FAIL` |
+| No archive commit yet (validate hasn't recorded a verdict) | `—` |
+
 ---
 
 ## Phase 4 — Render dashboard
@@ -111,9 +128,10 @@ Files in .agents/prds/ or .agents/plans/ (main, not completed/) with no linked G
 - [plans] some-draft.plan.md — "Plan: ..."
 
 ## Active Worktrees — PIV Progress
-| Worktree                       | Branch              | Issue | Phase     |
-|--------------------------------|---------------------|-------|-----------|
-| ../ai-layer-template-feat42-.. | feat/42-some-feat   | #42   | IMPLEMENT |
+| Worktree                       | Branch              | Issue | Phase     | Validate |
+|--------------------------------|---------------------|-------|-----------|----------|
+| ../ai-layer-template-feat42-.. | feat/42-some-feat   | #42   | IMPLEMENT | —        |
+| ../ai-layer-template-feat26-.. | feat/26-spike       | #26   | VALIDATE  | ✅ PASS  |
 ```
 
 End with a one-line summary: total open issues, open PRs, plans ready to implement, untracked
