@@ -177,11 +177,12 @@ at the boundary (the validate gate) rather than *inputs* (each tool call).
 
 **sandbox**:
 The pairing of a **worktree** (isolation container) **with** the synced auto-approve posture
-(`defaultMode: acceptEdits` + the `permissions.allow` toolchain list) that lets its internal
-operations — read / search / test / edit / commit — run without per-tool-use prompts. Safety
-comes from the **boundary**, not the directory wall: the validate gate guards session-end and
-irreversible or untrusted operations (`git push`, recursive delete, fetch-and-execute) are
-separately gated.
+(`defaultMode: auto` — a safety-classifier model judges each action by intent) that lets its
+internal operations — read / search / test / edit / commit — run without per-tool-use prompts.
+Safety comes from the **boundary**, not the directory wall: the validate gate guards session-end
+and irreversible or untrusted operations (`git push`, recursive delete, fetch-and-execute) are
+separately gated. The classifier is the *probabilistic* inner layer; the deterministic floor lives
+at the boundary (the validate gate, the `security_guard.py` deny hook).
 **Asymmetric by construction**: the posture is synced at *user scope* (global), so it outlives
 any single worktree and applies even where no worktree container and no validate gate exist —
 that "posture without container" zone is the *accepted residual risk*, held only by
