@@ -169,3 +169,42 @@ Medin.
 _Avoid_: refactor, post-mortem; a lifecycle hook (e.g. `SessionEnd`) as the trigger — the
 trigger is a semantic event a mechanical hook can't judge (hooks enforce objective red/green
 floors, handoffs carry semantic flow).
+
+### Unattended Autonomy
+
+The posture that lets N parallel agents run without per-tool-use approval: verify *outputs*
+at the boundary (the validate gate) rather than *inputs* (each tool call).
+
+**sandbox**:
+The pairing of a **worktree** (isolation container) **with** the synced auto-approve posture
+(`defaultMode: auto` — a safety-classifier model judges each action by intent) that lets its
+internal operations — read / search / test / edit / commit — run without per-tool-use prompts.
+Safety comes from the **boundary**, not the directory wall: the validate gate guards session-end
+and irreversible or untrusted operations (`git push`, recursive delete, fetch-and-execute) are
+separately gated. The classifier is the *probabilistic* inner layer; the deterministic floor lives
+at the boundary (the validate gate, the `security_guard.py` deny hook).
+**Asymmetric by construction**: the posture is synced at *user scope* (global), so it outlives
+any single worktree and applies even where no worktree container and no validate gate exist —
+that "posture without container" zone is the *accepted residual risk*, held only by
+`git push: ask` and `security_guard.py`.
+_Avoid_: treating sandbox ≡ worktree (the worktree is only the isolation half; the posture is
+the other half and is broader than it); "sandbox" as a directory or VM (the protection is the
+boundary gate, not isolation).
+
+**worktree**:
+The git-worktree isolation directory that is the **sandbox**'s container half — it gives
+parallel agents file-level isolation from each other and from the main checkout. It is the
+*container* component of a sandbox, not the whole sandbox; the auto-approve posture layered on
+top (and synced globally) is the other half.
+_Avoid_: using "worktree" and "sandbox" interchangeably (worktree = isolation only); branch,
+clone (a worktree shares the repo's object store; it is neither).
+
+**boundary**:
+The line a sandbox's *outputs* must cross to become durable or irreversible — where
+verification moves from "trust the inside" to "gate the crossing". Two kinds of crossing are
+gated: session-end (the validate gate must be green) and irreversible side effects
+(`git push` on `ask`; recursive deletes and untrusted fetch-and-execute denied by
+`security_guard.py`). Actual data *exfiltration* is explicitly out of this hook's scope.
+Graduating `git push` from `ask` to `allow` is the single dial that opens the last boundary.
+_Avoid_: perimeter, firewall (those imply keeping things out; the boundary gates what the
+sandbox sends out).

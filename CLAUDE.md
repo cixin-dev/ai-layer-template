@@ -12,15 +12,8 @@ and let each project fill in its own commands.
 
 ## Smart Zone
 
-LLMs have two hard limits this project is designed around:
-
-1. **Context decay** — an agent does its best work in roughly the first ~100k tokens of a
-   session. Past that, attention relationships overload and decisions get sloppy. A larger
-   context window does not fix this; it only buys more *dumb zone*.
-2. **Amnesia** — clearing context resets the agent entirely. Nothing survives a session
-   except what was written to a file.
-
-The working rules that follow from this:
+LLMs have two hard limits this project is designed around — *context decay* and *amnesia*
+(defined in CONTEXT.md, "Smart Zone"). The working rules that follow from them:
 
 - **One job per session.** Plan, implement, and review are separate sessions (see
   [PIV Loop](#piv-loop)). Don't review code in the same session that wrote it — the
