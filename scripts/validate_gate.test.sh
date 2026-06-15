@@ -93,6 +93,28 @@ payload_c='{"cwd": "'"$MAIN_C"'"}'
 stdout_c="$(printf '%s' "$payload_c" | CLAUDE_PROJECT_DIR="$MAIN_C" python3 "$HOOK" 2>"$STDERR_FILE")"
 assert_contains "$stdout_c" '"decision": "block"' "test(c): main-repo red blocks"
 
+# --- Test (c2): FAIL fires notify AND stdout stays exact block JSON ---
+# A red gate must invoke notify.sh fail (via the VALIDATE_GATE_NOTIFY seam) without
+# leaking any notify arg into the block-JSON stdout — the hook's only legal stdout write.
+NOTIFY_SHIM="$TMPDIR_ROOT/notify_shim.sh"
+NOTIFY_LOG="$TMPDIR_ROOT/notify.log"
+cat > "$NOTIFY_SHIM" << 'SHIM'
+#!/usr/bin/env bash
+echo "$*" >> "$NOTIFY_LOG_TARGET"
+SHIM
+chmod +x "$NOTIFY_SHIM"
+rm -f "$NOTIFY_LOG"
+MAIN_K="$TMPDIR_ROOT/main_k"
+make_tree "$MAIN_K" 1
+reset_runlog
+payload_k='{"cwd": "'"$MAIN_K"'"}'
+stdout_k="$(printf '%s' "$payload_k" | VALIDATE_GATE_NOTIFY="$NOTIFY_SHIM" NOTIFY_LOG_TARGET="$NOTIFY_LOG" CLAUDE_PROJECT_DIR="$MAIN_K" python3 "$HOOK" 2>"$STDERR_FILE")"
+assert_contains     "$stdout_k" '"decision": "block"' "test(c2): red still blocks"
+assert_not_contains "$stdout_k" 'Validate FAIL'       "test(c2): notify args do not leak into stdout"
+assert_contains "$(cat "$NOTIFY_LOG" 2>/dev/null || true)" "fail"          "test(c2): notify invoked with level fail"
+assert_contains "$(cat "$NOTIFY_LOG" 2>/dev/null || true)" "Validate FAIL" "test(c2): notify carries the FAIL title"
+assert_contains "$(cat "$NOTIFY_LOG" 2>/dev/null || true)" "main_k"        "test(c2): notify message names the repo dir"
+
 # --- Test (d): subdir of worktree (walk-up) ---
 # Walk starts from WORKTREE/src/deep, must climb to WORKTREE and find its validate.sh.
 # Current hook: uses MAIN_D (green) → no block → FAIL.

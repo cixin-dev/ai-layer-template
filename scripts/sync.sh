@@ -157,8 +157,8 @@ if ! command -v python3 >/dev/null 2>&1; then
     note "  Stop: $VG_CMD"
     note "  permissions.defaultMode: auto"
     note "  permissions.ask: Bash(git push *)"
-    note "  hooks.Notification[permission_prompt]: notify-send 'Claude Code' 'Permission needed'"
-    note "  hooks.Notification[idle_prompt]: notify-send 'Claude Code' 'Waiting for input'"
+    note "  hooks.Notification[permission_prompt]: \"\$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Permission needed'"
+    note "  hooks.Notification[idle_prompt]: \"\$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Waiting for input'"
   fi
 else
   python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$SHARED_SETTINGS" <<'PYEOF'

@@ -94,6 +94,22 @@ def main() -> None:
         combined = (result.stderr + "\n" + result.stdout).strip()
         summary = trim_output(combined) or "validate.sh exited non-zero with no output"
         reason = f"Validation gate failed:\n{summary}"
+        # Best-effort FAIL notification. Captured (never touches our block-JSON
+        # stdout) and guarded so it can neither fail nor delay the gate.
+        first_line = summary.splitlines()[0] if summary else "validate.sh failed"
+        notify = os.environ.get(
+            "VALIDATE_GATE_NOTIFY", str(Path(__file__).resolve().parent / "notify.sh")
+        )
+        repo = Path(project_dir).name or project_dir
+        try:
+            subprocess.run(
+                [notify, "fail", "Validate FAIL", f"{repo}: {first_line}"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            pass  # notification is best-effort; never fail or delay the gate
         print(json.dumps({"decision": "block", "reason": reason}))
 
     sys.exit(0)

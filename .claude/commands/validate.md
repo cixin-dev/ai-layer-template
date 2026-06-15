@@ -114,6 +114,14 @@ On PASS:
    the plan's `## Summary` section and the report path from
    `.agents/reports/{plan-name}-report.md`.
 3. **Share the PR URL** with reviewers.
+4. **Signal PASS** (best-effort — never gate the PR flow on it):
+   `bash .claude/hooks/notify.sh pass "Validate PASS" "{branch}: PR ready"`. This fires the
+   bell and (if a topic is configured) pushes to the operator's phone. PASS is emitted only
+   here, in a real validate session — the deliberate asymmetry to the FAIL path, which the
+   `validate_gate.py` Stop hook fires deterministically in *any* session. Note: `pass`
+   intentionally leaves the tmux window colour untouched, so it cannot false-clear a
+   concurrent pane's live red (see ADR-0021); release the flag only with an explicit
+   `notify.sh clear`.
 
 **Review-fix loop** — if reviewers request changes: open a fresh session inside the feature
 worktree, address the comments, re-run `/validate` (which falls back to `completed/` for

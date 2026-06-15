@@ -10,13 +10,13 @@
       {
         "matcher": "permission_prompt",
         "hooks": [
-          { "type": "command", "command": "notify-send 'Claude Code' 'Permission needed'" }
+          { "type": "command", "command": "\"$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Permission needed'" }
         ]
       },
       {
         "matcher": "idle_prompt",
         "hooks": [
-          { "type": "command", "command": "notify-send 'Claude Code' 'Waiting for input'" }
+          { "type": "command", "command": "\"$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Waiting for input'" }
         ]
       }
     ]
