@@ -1,20 +1,21 @@
 ---
 name: system-evolution
-description: The outer loop that turns each bug into a permanent improvement to the AI Layer. Use after a PIV Loop surfaces a defect, when a mistake recurs, or when the user mentions retroactive sessions, improving CLAUDE.md/commands/skills, or stopping a class of problem from recurring.
+description: The outer loop that turns each bug into a permanent improvement to the Harness. Use after a PIV Loop surfaces a defect, when a mistake recurs, or when the user mentions retroactive sessions, improving CLAUDE.md/commands/skills, or stopping a class of problem from recurring.
 ---
 
 # System Evolution
 
 The outer loop around the [PIV Loop](../piv-loop/SKILL.md). When implementation surfaces a bug or a
-miss, the lesson isn't "fix this code" — it's "the AI Layer let this through." The AI Layer
-(CLAUDE.md + commands + skills + examples) is a versioned, reviewable, shareable asset.
-Improving it is how a one-time mistake becomes a permanent, compounding safeguard.
+miss, the lesson isn't "fix this code" — it's "the Harness let this through." The Harness — the
+AI Layer (CLAUDE.md + commands + skills + examples) plus the deterministic gate (`validate.sh` /
+hooks / tests) — is a versioned, reviewable, shareable asset. Improving it is how a one-time
+mistake becomes a permanent, compounding safeguard.
 
 ## Two loops
 
 - **Inner loop** (PIV went fine): finish the Issue → merge → take the next Issue.
 - **Outer loop** (PIV surfaced a problem): pause → run a retroactive session → improve the
-  AI Layer → return to the next PIV.
+  Harness → return to the next PIV.
 
 The outer loop is **triggered through the workflow**, never from memory or a lifecycle hook
 (ADR-0010): two deterministic entry points route into `/retroactive` — the Validate step's
@@ -25,10 +26,17 @@ The outer loop is **triggered through the workflow**, never from memory or a lif
 
 Frame it bluntly:
 
-> "You let this problem reach the codebase. Look at your AI Layer — rules, commands,
-> skills, workflow — and find what we can change so this class of problem can't recur."
+> "You let this problem reach the codebase. Look at your Harness — rules, commands,
+> skills, checks, workflow — and find what we can change so this class of problem can't recur."
 
-Then check four dimensions, earliest-in-the-workflow first:
+First ask: **is the defect mechanically checkable** (a lint rule, type check, test case, or grep
+assertion)? If yes, add the check to `.claude/validate.sh` or the test suite — reach for the
+deterministic gate (the Stop hook, ADR-0009) before a prose rule. The check is primary but not
+exclusive: if it catches only the instance while the class stays judgment-shaped, keep a prose
+dimension alongside it.
+
+For the judgment-shaped residue a check can't express, fall back to the four prose dimensions,
+earliest-in-the-workflow first:
 
 1. **Commands** — is the procedure missing a step?
 2. **On-demand context** — do `examples/` or referenced docs need updating?
