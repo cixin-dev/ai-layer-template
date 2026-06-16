@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# notify.sh — Claude Code notification primitive (Channel A).
+# notify.sh — Claude Code notification primitive.
 #
-# One deep module owning two independent, error-swallowing sinks:
-#   1. tmux window flag (+ terminal bell) — at-keyboard, per-project-window signal
-#   2. network push via ntfy              — AFK truth, milestones only
+# One deep module owning two independent, error-swallowing transports:
+#   1. tmux bell          — at-keyboard: trips the agent's OWN tmux window bell flag.
+#                           tmux's `monitor-bell` + the operator's `window-status-bell-style`
+#                           render it in the status bar, and tmux auto-clears it when the
+#                           window is visited. No custom window colour is set here (ADR-0021).
+#   2. network push (ntfy) — AFK truth, milestones only; carries the severity.
 #
 # Contract: NEVER writes stdout, NEVER fails its caller. Every path exits 0.
-# Levels (severity on the single tmux colour slot: fail > info > pass):
-#   fail   red latch (floor) + bell + push          — a real gate failure
-#   info   yellow (only if not already red) + bell  — permission/idle, at-keyboard
-#   pass   bell + push, colour untouched            — green milestone (won't false-clear a peer fail)
-#   clear  reset the flag (the only release)        — operator-triggered
+# Levels (the issue signature; severity lives in the push, not the window):
+#   fail   bell + push   — a real gate failure
+#   pass   bell + push   — a green milestone (PR ready)
+#   info   bell only     — permission/idle, at-keyboard; never hits the phone
 #
-# NOT set -e: a failing sink must never abort the next one or the caller.
+# NOT set -e: a failing transport must never abort the next one or the caller.
 set -u
 
 level="${1:-info}"
@@ -23,48 +25,19 @@ message="${3:-}"
 CONF="$(dirname "$0")/notify.local.conf"
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null || true
 
-# --- tmux sink: window flag + bell (only meaningful inside tmux) ---
+# --- tmux transport: ring the bell → tmux flags the agent's own window ----------
+# The BEL goes to the hook's controlling tty (the agent's pane), so tmux attributes
+# the window bell flag to the right window with no -t resolution, and visiting the
+# window clears it — tmux's native per-window latch, no explicit release needed.
 if [ -n "${TMUX:-}" ]; then
-  # Resolve the calling agent's OWN window via its inherited $TMUX_PANE (no -t needed).
-  {
-    win="$(tmux display-message -p '#{window_id}' 2>/dev/null)"
-    case "$level" in
-      clear)
-        # The only thing that releases the latch: restore tmux defaults.
-        tmux set-option -w -t "$win" -u @claude_attention 2>/dev/null || true
-        tmux set-window-option -t "$win" -u window-status-style 2>/dev/null || true
-        ;;
-      fail)
-        # Red is the floor — set unconditionally, never downgraded.
-        tmux set-option -w -t "$win" @claude_attention fail 2>/dev/null || true
-        tmux set-window-option -t "$win" window-status-style 'fg=red,bold' 2>/dev/null || true
-        ;;
-      info)
-        # Yellow only if the window is not already red (don't downgrade a live fail).
-        cur="$(tmux show-options -wv -t "$win" @claude_attention 2>/dev/null)"
-        if [ "$cur" != "fail" ]; then
-          tmux set-option -w -t "$win" @claude_attention info 2>/dev/null || true
-          tmux set-window-option -t "$win" window-status-style 'fg=yellow,bold' 2>/dev/null || true
-        fi
-        ;;
-      pass)
-        # Colour untouched — a peer pass must not false-clear another pane's live fail.
-        :
-        ;;
-    esac
-  } 2>/dev/null || true
-
-  # Bell for every level except clear.
-  if [ "$level" != "clear" ]; then
-    printf '\a' > "${NOTIFY_BELL_TARGET:-/dev/tty}" 2>/dev/null || true
-  fi
+  printf '\a' > "${NOTIFY_BELL_TARGET:-/dev/tty}" 2>/dev/null || true
 fi
 
-# --- network sink: ntfy push (milestones only: fail/pass; info/clear stay quiet) ---
+# --- network transport: ntfy push (milestones only: fail/pass; info stays quiet) -
 if [ -n "${NTFY_TOPIC:-}" ]; then
   case "$level" in
     fail|pass)
-      curl -fsS -m 5 -H "Title: $title" -d "$message" \
+      curl -fsS -m 5 -H "Title: $title" --data-raw "$message" \
         "${NTFY_URL:-https://ntfy.sh}/$NTFY_TOPIC" >/dev/null 2>&1 || true
       ;;
   esac
