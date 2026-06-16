@@ -256,3 +256,20 @@ benign `ask` backstop.
 _Avoid_: conflating with the benign `git push` checkpoint (that is the dial on `ask`; this is the
 floor on `deny` — they graduate independently); treating the auto-mode classifier as the floor
 (it is the probabilistic inner layer, not the deterministic one — ADR-0020).
+
+**notification**:
+The boundary's **outbound signal to the operator** — the complement to the validate gate. Where
+the gate verifies *outputs* so agents need no per-tool approval, the notification **interrupts**
+the operator when a boundary event happens, so they stop polling the `dashboard` (**polling →
+interrupt**). One primitive (`notify.sh`) owns delivery; a notification is described on two axes:
+- **transport** — *where* it is delivered: the **tmux bell** (at-keyboard — trips the agent's own
+  tmux window flag, a glanceable hint that tmux auto-clears when the window is visited) and the
+  **network push** (AFK — reliable and never missed, and the carrier of severity). The window
+  flag is a hint; the push is the source of truth (ADR-0021).
+- **source** — *what event* fires it: **Source A** = the validate verdict (`fail` via the
+  `validate gate` Stop hook in any session, `pass` via `/validate` in a real validate session);
+  **Source B** = the PR-state watcher (approve / merge / CI — a follow-up). A source is a
+  call-site that reuses the transports; **adding a source must not touch a transport**.
+_Avoid_: conflating transport and source (transport = delivery mechanism, source = triggering
+event — Source B reuses both transports); "sink" / "channel" (the pre-canonical names; Issue
+#40's "Channel A" is Source A); alert, ping.
