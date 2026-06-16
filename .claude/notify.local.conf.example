@@ -1,0 +1,10 @@
+# notify.local.conf — copy to notify.local.conf (gitignored) to enable the network sink.
+# Shell-sourced KEY=value lines. With no file present, notify.sh's network sink is a no-op.
+
+# ntfy (https://ntfy.sh) — the AFK push channel. Set a topic to enable it.
+# NTFY_TOPIC=your-secret-topic
+# NTFY_URL=https://ntfy.sh        # default; override for a self-hosted server
+
+# Pushover (alternative push provider; wiring is out of scope — config placeholder only).
+# PUSHOVER_TOKEN=
+# PUSHOVER_USER=
