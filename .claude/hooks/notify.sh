@@ -2,10 +2,10 @@
 # notify.sh — Claude Code notification primitive.
 #
 # One deep module owning two independent, error-swallowing transports:
-#   1. tmux bell          — at-keyboard: trips the agent's OWN tmux window bell flag.
-#                           tmux's `monitor-bell` + the operator's `window-status-bell-style`
-#                           render it in the status bar, and tmux auto-clears it when the
-#                           window is visited. No custom window colour is set here (ADR-0021).
+#   1. terminal bell      — at-keyboard: sends BEL to the controlling tty. Under tmux,
+#                           monitor-bell + window-status-bell-style render it in the status
+#                           bar; outside tmux, the terminal emulator rings / flashes its own
+#                           window. No custom window colour is set here (ADR-0021).
 #   2. network push (ntfy) — AFK truth, milestones only; carries the severity.
 #
 # Contract: NEVER writes stdout, NEVER fails its caller. Every path exits 0.
@@ -25,13 +25,11 @@ message="${3:-}"
 CONF="$(dirname "$0")/notify.local.conf"
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null || true
 
-# --- tmux transport: ring the bell → tmux flags the agent's own window ----------
-# The BEL goes to the hook's controlling tty (the agent's pane), so tmux attributes
-# the window bell flag to the right window with no -t resolution, and visiting the
-# window clears it — tmux's native per-window latch, no explicit release needed.
-if [ -n "${TMUX:-}" ]; then
-  printf '\a' > "${NOTIFY_BELL_TARGET:-/dev/tty}" 2>/dev/null || true
-fi
+# --- terminal bell: BEL to the controlling tty ---------------------------------
+# Works in any terminal emulator. Under tmux the window bell flag lights up the
+# status bar (monitor-bell + window-status-bell-style); outside tmux the terminal
+# emulator rings / flashes its own window. NOTIFY_BELL_TARGET overrides the target.
+{ printf '\a' > "${NOTIFY_BELL_TARGET:-/dev/tty}"; } 2>/dev/null || true
 
 # --- network transport: ntfy push (milestones only: fail/pass; info stays quiet) -
 if [ -n "${NTFY_TOPIC:-}" ]; then
