@@ -52,14 +52,19 @@ into independently-grabbable Issues with ordering and dependencies.
 During the brain dump, watch for domain terms that aren't yet in `CONTEXT.md`.
 
 **Inline capture** — If the term is lone, additive, and self-contained (no existing entry
-contradicts it; it can be defined without defining or renaming anything else), add it to
-`CONTEXT.md` directly and continue.
+contradicts it; it can be defined without defining or renaming anything else):
+1. Before writing, **narrate in Traditional Chinese**: describe the term, its meaning, and
+   why it belongs — wait for the user to confirm before touching `CONTEXT.md`.
+2. Add the term to `CONTEXT.md` and continue.
 
 **Escalate** — If **either** (a) the term would contradict or force a rewrite of an
 existing `CONTEXT.md` entry, **or** (b) two or more new terms are interdependent (defining
 one forces defining or renaming the others), do **not** patch inline. Instead:
 1. Name the conflict or coupling to the user.
-2. Emit a handoff via `handoff`.
+2. Emit a handoff via `handoff`, and **inject this contract into the handoff**: the
+   `grill-with-docs` session must narrate changes to the user in Traditional Chinese, and
+   any resulting `CONTEXT.md` or ADR edits must travel in a dedicated PR whose body
+   contains a Traditional Chinese `## 變更說明` section naming which terms changed and why.
 3. In a fresh session, run `grill-with-docs` to resolve the vocabulary before returning to
    Strategic Planning.
 

@@ -17,3 +17,15 @@ jobs:
           bash scripts/security_guard.test.sh
           bash scripts/piv_check.test.sh
           bash scripts/notify.test.sh
+          bash scripts/doc_change_gate.test.sh
+      - name: Fetch base branch for doc change gate
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{ github.base_ref }}
+      - name: Doc change gate
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git diff --name-only origin/${{ github.base_ref }}...HEAD > /tmp/changed_files.txt
+          printf '%s' "$PR_BODY" > /tmp/pr_body.txt
+          bash scripts/doc_change_gate.sh /tmp/changed_files.txt /tmp/pr_body.txt
