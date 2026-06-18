@@ -1,6 +1,11 @@
 {
   "permissions": {
     "defaultMode": "auto",
+    "allow": [
+      "Skill",
+      "Read(~/.claude/skills/**)",
+      "Read(~/.claude/plugins/**)"
+    ],
     "ask": [
       "Bash(git push *)"
     ]
