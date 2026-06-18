@@ -28,7 +28,10 @@ has_section=0
 has_cjk=0
 
 grep -qE '^#{1,6}[[:space:]]*變更說明' "$PR_BODY_FILE" 2>/dev/null && has_section=1
-grep -qP '[\x{4e00}-\x{9fff}]' "$PR_BODY_FILE" 2>/dev/null && has_cjk=1
+# Exclude heading lines so the heading itself can't satisfy the CJK content check.
+if grep -vE '^#{1,6}[[:space:]]' "$PR_BODY_FILE" 2>/dev/null | grep -qP '[\x{4e00}-\x{9fff}]' 2>/dev/null; then
+  has_cjk=1
+fi
 
 [ "$has_section" -eq 1 ] && [ "$has_cjk" -eq 1 ] && exit 0
 

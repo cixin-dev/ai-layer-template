@@ -82,6 +82,14 @@ EOF
 ec=0; bash "$GATE" "$FILES_5" "$BODY_5" 2>/dev/null || ec=$?
 assert_pass $ec "test(5): docs/adr/* + qualified TC body → pass"
 
+# --- Test (6): CONTEXT.md + bare heading only (no TC content below) → fail ---
+FILES_6="$TMPDIR_ROOT/files6.txt"
+BODY_6="$TMPDIR_ROOT/body6.txt"
+make_files "$FILES_6" "CONTEXT.md"
+printf '## 變更說明\n' > "$BODY_6"
+ec=0; bash "$GATE" "$FILES_6" "$BODY_6" 2>/dev/null || ec=$?
+assert_fail $ec "test(6): bare heading only (no TC content) → fail"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
 else

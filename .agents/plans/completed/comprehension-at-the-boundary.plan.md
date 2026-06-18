@@ -1,5 +1,16 @@
 # Plan: Comprehension at the Boundary（誤路由修正 + 繁中理解關卡）
 
+> **English TL;DR (for future sessions):** This is a System Evolution / retroactive patch
+> fixing two failure modes: (1) `grill-with-docs` was being used as a cold-start feature
+> entry point, silently inflating canonical docs on each use; (2) there was no mechanical
+> floor ensuring the author could comprehend canonical doc changes. Fix: routing contract
+> in `CLAUDE.md` (grill-with-docs cold-start forbidden), CI gate requiring a Traditional
+> Chinese `## 變更說明` section in any PR touching `CONTEXT.md` or `docs/adr/`, and
+> `strategic-planning` skill updated to narrate inline captures in TC before writing.
+> See ADR-0022 for the decision record. The rest of this file is written in Traditional
+> Chinese per the principle it proposes (TC prose stays ephemeral; this archived plan is
+> an intentional exception and carries this English header for future-session access).
+
 > 這是一次 **System Evolution / retroactive** 修補（`/retroactive` 的 Phase 4：Apply and
 > record）。Phase 1–3（Diagnose / Locate the gap / Propose）已在一次 grill 中完成，本檔是其
 > durable 產出。**散文用繁中、canonical 詞與 code 用英文**——本檔本身就在 dogfood 它所提議的
