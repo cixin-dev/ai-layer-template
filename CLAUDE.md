@@ -66,6 +66,10 @@ Four places to look:
 3. **Global rules** (this file) — is an existing constraint too vague to bind?
 4. **Plan / PRD templates** — is a section structurally missing?
 
+## Communication
+
+When reporting information, be extremely concise and sacrifice grammar for the sake of concision.
+
 ## Conventions
 
 Behavioral guardrails for every change. These bias toward caution over speed; for trivial
@@ -114,3 +118,5 @@ Fill these in per project. Keep it short.
   - Never commit directly to local `main` — main advances only by pulling merged PRs. Every change, including AI Layer / retroactive fixes to commands or this file, goes through a branch + PR. (A local-only main commit becomes a divergence after the next squash-merge — retroactive: fix-unsync-cross-mount.)
   - Never autonomously push to `main` as a side-effect of cleanup — if a worktree or branch holds commits not in main after a squash-merge, stop and surface options to the user (new branch + follow-up PR, or explicit discard). An agent that cherry-picks and pushes without asking is harder to audit than one that simply pauses. (retroactive: clean-worktree-unmerged-commits)
   - Never skip Phase 4 of `/implement` — the report is the only durable record of what shipped, and the implementer must leave the plan in `.agents/plans/` for `/validate` to read; archiving to `completed/` is Validate's job on a green gate, not the implementer's (retroactive: fix-unsync-cross-mount).
+  - New feature ideas always enter via `strategic-planning` (brain dump); `grill-with-docs` may only be invoked from a `strategic-planning` escalation handoff — **never cold-start it directly as a feature entry point**, which is the misrouting that inflates canonical docs silently (retroactive: comprehension-at-the-boundary).
+  - Canonical docs (`CONTEXT.md`, ADRs) stay English; every PR that touches them must include a Traditional Chinese `## 變更說明` section in the PR body — **never persist Chinese translations into canonical files**, which would create a second drifting source of truth (retroactive: comprehension-at-the-boundary).
