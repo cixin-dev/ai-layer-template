@@ -42,7 +42,10 @@ Two root causes, treated asymmetrically because only one is mechanically enforce
 
 3. **CI floor for canonical doc PRs** — any PR that touches `CONTEXT.md` or `docs/adr/`
    must include a `## 變更說明` section (Traditional Chinese) in the PR body. Enforced by
-   `scripts/doc_change_gate.sh`, run as a `pull_request`-only step in CI.
+   `scripts/doc_change_gate.sh`, run as a standalone `pull_request`-only **job**
+   (`doc-gate`) in CI. A standalone job (not a step inside the `test` job) gives the gate
+   its own status check that a push-event run cannot mask — but a check only *blocks* a
+   merge once it is marked **required** in branch protection (see Consequences).
 
 4. **Routing contract in `CLAUDE.md`** — new feature ideas enter via `strategic-planning`
    (brain dump); `grill-with-docs` may only be invoked from a `strategic-planning`
@@ -75,7 +78,11 @@ Two root causes, treated asymmetrically because only one is mechanically enforce
   persistence).
 - No second persistent translation to maintain or let drift.
 - The CI gate dogfoods itself: this PR touches `docs/adr/0022`, so its own body must
-  contain a `## 變更說明` section — the gate blocks the PR if it does not.
+  contain a `## 變更說明` section. The gate blocks the PR **only when the `doc-gate` check
+  is a required status check in branch protection** — a CI step that merely exits non-zero
+  produces a red mark but does not stop a merge by itself. Making `doc-gate` required (and
+  keeping it a standalone, push-unmaskable job) is what gives the floor teeth; without it
+  the gate is advisory (inert). (retroactive: inert-doc-gate)
 - Residual risk: the routing contract and the `grill-with-docs` handoff contract are prose;
   an agent that ignores `CLAUDE.md` can still misroute. This is accepted — it matches the
   risk profile of every other prose rule in the system.

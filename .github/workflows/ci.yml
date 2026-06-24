@@ -1,7 +1,13 @@
 name: CI
 
 on:
+  # Feature branches are covered by the `pull_request` event. Firing `push` on
+  # every branch too would put a SECOND, always-green `test` check-run on the PR
+  # head SHA (the push run skips the doc gate) — and a required `test` check can
+  # be satisfied by whichever run GitHub resolves, masking the gate. Scope push
+  # to `main` so each PR head SHA carries exactly one of each check. (ADR-0022)
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -9,11 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history so the doc change gate can resolve the merge base for
-          # `git diff origin/<base>...HEAD` (three-dot). A shallow clone (the
-          # default fetch-depth: 1) has no common ancestor → `fatal: no merge base`.
-          fetch-depth: 0
       - name: Run tests
         run: |
           bash scripts/sync.test.sh
@@ -23,11 +24,23 @@ jobs:
           bash scripts/piv_check.test.sh
           bash scripts/notify.test.sh
           bash scripts/doc_change_gate.test.sh
-      - name: Fetch base branch for doc change gate
-        if: github.event_name == 'pull_request'
+
+  doc-gate:
+    # Standalone, pull_request-only job so the gate is its OWN status check
+    # (`doc-gate`) — never a step buried inside `test`, never masked by a
+    # push-event run. A CI step that exits non-zero is only a *blocking* gate once
+    # this check is REQUIRED in branch protection; otherwise it is advisory (inert).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `git diff origin/<base>...HEAD` (three-dot) can resolve
+          # the merge base. A shallow clone has no common ancestor → no merge base.
+          fetch-depth: 0
+      - name: Fetch base branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Doc change gate
-        if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
