@@ -99,3 +99,10 @@ mechanism**, because dangerous pushes are blocked by the hook, not the permissio
   floor *does* cover, and must, includes global-option prefixes the agent emits naturally
   (`git -C <path> push …`, `git -c k=v push …`, `git --no-pager push …`): the hook anchor is
   `\bgit\b…\bpush\b`, not strict `git push` adjacency, precisely so these do not slip through.
+- **Lease family allowed to non-default branches (added 2026-06-24, glossary slim-down):** the
+  safe lease family (`--force-with-lease` / `--force-if-includes`) aimed at a **non-default**
+  branch is **allowed**, not denied — `security_guard.py` matches `--force` with a negative
+  lookahead `(?!-with-lease|-if-includes)`, so the lease flags pass. It is the agent's correct
+  non-destructive recovery path and cannot clobber published history non-interactively. Bare
+  `--force` / `-f` / `+refspec`, and any push whose literal destination is `main`/`master`,
+  remain denied.
