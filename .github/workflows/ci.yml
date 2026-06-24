@@ -9,6 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the doc change gate can resolve the merge base for
+          # `git diff origin/<base>...HEAD` (three-dot). A shallow clone (the
+          # default fetch-depth: 1) has no common ancestor → `fatal: no merge base`.
+          fetch-depth: 0
       - name: Run tests
         run: |
           bash scripts/sync.test.sh
