@@ -141,20 +141,15 @@ loop's steps, not concepts with competing names. Term: Cole Medin.
 _Avoid_: plan/build/test as loose synonyms
 
 **validate gate**:
-The automatic enforcement floor of the Validate step: a `Stop` hook (`validate_gate.py`) that
+The automatic enforcement floor of the Validate step — a `Stop` hook (`validate_gate.py`) that
 runs the project's `.claude/validate.sh` when a session tries to end and *blocks* completion on
-failure — turning the test-first discipline from a norm into an enforced gate. Global machinery
-(synced to `~/.claude/`), opt-in per project by the presence of `.claude/validate.sh` (fails
-open when absent). One "validate" root, two layers: the **validate gate** is the *automatic
-floor*; **`/validate`** is the *deliberate full pass* (`validate.sh` + the plan's E2E + the entry
-to human review), run as the Validate step's own session. Framing: Cole Medin, who names both
-layers with the single root "validate". The `.claude/validate.sh` indirection is this template's
-language-agnostic extension of Cole's hardcoded hook (ADR-0009).
-_Avoid_: "verify" as a second layer — there is no verify-vs-validate split (a false distinction;
-"verify" survives only in CLAUDE.md's `Verify commands` slot, naming the commands you check
-*with*, which `validate.sh` bundles); conflating the validate gate (automatic hook) with
-`/validate` (deliberate command); tdd-gate (the red-green discipline the gate enforces, not the
-gate itself).
+failure, turning the test-first discipline from a norm into an enforced gate. One "validate"
+root, two layers: the validate gate is the *automatic floor*; **`/validate`** is the *deliberate
+full pass* run as the Validate step's own session (ADR-0009).
+_Avoid_: "verify" as a second layer (no verify-vs-validate split; "verify" survives only in
+CLAUDE.md's `Verify commands` slot, naming the commands `validate.sh` bundles); conflating the
+validate gate (automatic hook) with `/validate` (deliberate command); tdd-gate (the red-green
+discipline the gate enforces, not the gate itself).
 
 **System Evolution**:
 The outer loop: when a bug slips through, fix the Harness — first the deterministic gate (a
@@ -195,17 +190,10 @@ The posture ships as a versioned, inert `.claude/settings.shared.json` that Clau
   which must hold the force/main-push cases the auto-mode classifier was probe-shown to approve.
 
 **sandbox**:
-The pairing of a **worktree** (isolation container) **with** the synced auto-approve posture
-(`defaultMode: auto` — a safety-classifier model judges each action by intent) that lets its
-internal operations — read / search / test / edit / commit — run without per-tool-use prompts.
-Safety comes from the **boundary**, not the directory wall: the validate gate guards session-end
-and irreversible or untrusted operations (`git push`, recursive delete, opaque code execution) are
-separately gated. The classifier is the *probabilistic* inner layer; the deterministic floor lives
-at the boundary (the validate gate, the `security_guard.py` deny hook).
-**Asymmetric by construction**: the posture is synced at *user scope* (global), so it outlives
-any single worktree and applies even where no worktree container and no validate gate exist —
-that "posture without container" zone is the *accepted residual risk*, held only by
-`git push: ask` and `security_guard.py`.
+A **worktree** (isolation container) paired **with** the synced auto-approve posture
+(`defaultMode: auto` — a safety-classifier model judges each action by intent) so its internal
+ops — read / search / test / edit / commit — run without per-tool-use prompts. Safety is the
+**boundary** gate, not the directory wall (ADR-0018, ADR-0020).
 _Avoid_: treating sandbox ≡ worktree (the worktree is only the isolation half; the posture is
 the other half and is broader than it); "sandbox" as a directory or VM (the protection is the
 boundary gate, not isolation).
@@ -219,57 +207,39 @@ _Avoid_: using "worktree" and "sandbox" interchangeably (worktree = isolation on
 clone (a worktree shares the repo's object store; it is neither).
 
 **boundary**:
-The line a sandbox's *outputs* must cross to become durable or irreversible — where
-verification moves from "trust the inside" to "gate the crossing". Two kinds of crossing are
-gated: session-end (the validate gate must be green) and irreversible side effects
-(benign `git push` on `ask`; **dangerous push**, recursive deletes, and untrusted **opaque code
-execution** denied by `security_guard.py`). Actual data *exfiltration* is explicitly out of this hook's scope.
-Graduating `git push` from `ask` to `allow` is the single dial that opens the last boundary.
+The line a sandbox's *outputs* must cross to become durable or irreversible — where verification
+moves from "trust the inside" to "gate the crossing": session-end held by the validate gate,
+irreversible side effects gated by `security_guard.py` (ADR-0009, ADR-0018).
 _Avoid_: perimeter, firewall (those imply keeping things out; the boundary gates what the
 sandbox sends out).
 
 **opaque code execution**:
-The class of command `security_guard.py` denies under the **boundary**: a command whose
-real payload is **not literal in the command**, so no human sees what will actually run when
-it is authored. Two mechanisms: **pipe-to-shell** (`curl … | sh`, `wget … | bash`, bare
-`… | sh`) and **command substitution into a shell** (`sh -c "$(…)"` / backtick / `eval "$(…)"`).
-Network fetch is only *one* source of the payload — bare local substitution (e.g.
-`eval "$(ssh-agent)"`) is denied too, a deliberately accepted false positive (ADR-0019); the
-threat is the *opacity*, not the fetch. Distinct from `exfiltration`, which is data going *out*
-and is out of scope.
-_Avoid_: fetch-and-execute (names only the network-fetch source, so it both under-describes the
-class and mislabels the local-substitution denials — superseded by this term); remote code
-execution (implies a remote attacker/foothold, not the local-opacity framing here).
+A command `security_guard.py` denies at the **boundary**: one whose real payload is **not literal
+in the command**, so no human sees what will run when it is authored — via **pipe-to-shell**
+(`curl … | sh`) or **command substitution into a shell** (`eval "$(…)"`). The threat is the
+*opacity*, not the fetch; bare local substitution is denied too. Distinct from `exfiltration`
+(data going *out*, out of scope) (ADR-0019).
+_Avoid_: fetch-and-execute (names only the network-fetch source; under-describes the class and
+mislabels the local-substitution denials — superseded by this term); remote code execution
+(implies a remote attacker/foothold, not the local-opacity framing here).
 
 **dangerous push**:
-The subset of `git push` that is **denied** at the **boundary**, distinct from the benign
-`git push` that is merely gated on `ask`. Two forms: **force-push** (rewriting published
-history) and **push-to-default-branch** (clobbering `main`/`master`). The split is the core of
-ADR-0020: benign push is a *friction dial* that may be graduated `ask → allow`; dangerous push
-is a *deterministic floor* that must hold in **every** permission mode, so it lives in the
-`security_guard.py` deny hook, **not** the permission layer (a static allow rule or the auto-mode
-classifier — the classifier was probe-shown to approve both forms). The floor is bounded by what
-is **literal in the command string**: the safe lease family (`--force-with-lease` /
-`--force-if-includes`) to a non-default branch is allowed; the implicit bare `git push` and
-quoted/variable-expanded targets it cannot read are out of scope *by design* and stay on the
-benign `ask` backstop.
+The subset of `git push` **denied** at the **boundary** — two forms: **force-push** (rewriting
+published history) and **push-to-default-branch** (clobbering `main`/`master`) — distinct from the
+benign `git push` merely gated on `ask`. Benign push is a *friction dial* (`ask → allow`);
+dangerous push is a *deterministic floor* in **every** permission mode, living in the
+`security_guard.py` deny hook, **not** the permission layer (ADR-0020).
 _Avoid_: conflating with the benign `git push` checkpoint (that is the dial on `ask`; this is the
-floor on `deny` — they graduate independently); treating the auto-mode classifier as the floor
-(it is the probabilistic inner layer, not the deterministic one — ADR-0020).
+floor on `deny` — they graduate independently); treating the auto-mode classifier as the floor (it
+is the probabilistic inner layer, not the deterministic one — ADR-0020).
 
 **notification**:
-The boundary's **outbound signal to the operator** — the complement to the validate gate. Where
-the gate verifies *outputs* so agents need no per-tool approval, the notification **interrupts**
-the operator when a boundary event happens, so they stop polling the `dashboard` (**polling →
-interrupt**). One primitive (`notify.sh`) owns delivery; a notification is described on two axes:
-- **transport** — *where* it is delivered: the **tmux bell** (at-keyboard — trips the agent's own
-  tmux window flag, a glanceable hint that tmux auto-clears when the window is visited) and the
-  **network push** (AFK — reliable and never missed, and the carrier of severity). The window
-  flag is a hint; the push is the source of truth (ADR-0021).
-- **source** — *what event* fires it: **Source A** = the validate verdict (`fail` via the
-  `validate gate` Stop hook in any session, `pass` via `/validate` in a real validate session);
-  **Source B** = the PR-state watcher (approve / merge / CI — a follow-up). A source is a
-  call-site that reuses the transports; **adding a source must not touch a transport**.
+The boundary's **outbound signal to the operator** — the complement to the validate gate
+(**polling → interrupt**: a boundary event interrupts the operator so they stop polling the
+`dashboard`). One primitive (`notify.sh`) owns delivery; described on two axes — **transport**
+(*where*: the at-keyboard **tmux bell** and the AFK **network push**) and **source** (*what event*:
+**Source A** = the validate verdict, **Source B** = the PR-state watcher). A source reuses the
+transports; **adding a source must not touch a transport** (ADR-0021).
 _Avoid_: conflating transport and source (transport = delivery mechanism, source = triggering
 event — Source B reuses both transports); "sink" / "channel" (the pre-canonical names; Issue
 #40's "Channel A" is Source A); alert, ping.
