@@ -1,7 +1,11 @@
 name: CI
 
 on:
+  # Scope push runs to main only. A bare `push:` fires on every branch, so a PR
+  # branch got two `test` runs (push + pull_request) on the same SHA. PRs are
+  # covered by the pull_request event; push covers post-merge main.
   push:
+    branches: [main]
   pull_request:
 
 jobs:
