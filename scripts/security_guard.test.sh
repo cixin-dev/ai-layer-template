@@ -97,6 +97,23 @@ assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin maste
 assert_allow '{"tool_name":"Bash","tool_input":{"command":"git config push.default simple"}}'  "allow: git config push.default"
 assert_allow '{"tool_name":"Bash","tool_input":{"command":"git checkout main && git push origin feature"}}' "allow: checkout main && push feature"
 
+# --- PRECISION: "push" + "main" merely mentioned in text must NOT false-match, while a
+#     real push to the default branch still denies (the FP class that blocked benign work) ---
+# Commit message / non-push subcommand that contains the words push + main → ALLOW
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git commit -m \"scope push to main\""}}'         "allow: commit msg says push to main"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git -c user.name=x commit -m \"push origin main\""}}' "allow: global-opt + commit msg push main"
+# Feature branch whose NAME contains push-to-main, pushed to a feature ref → ALLOW
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push -u origin chore/ci-scope-push-to-main"}}'  "allow: feature branch named ...push-to-main"
+# Real push is to a feature; "main" only lives in an earlier commit message → ALLOW
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git add f && git commit -m \"push to main\" && git push origin feature"}}' "allow: msg push-to-main, real push feature"
+# `main` on a later line is not this push's target → ALLOW
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin feature\necho main"}}'            "allow: main on a later line"
+# A REAL push to the default branch still denies — bound at a global-opt, redirect, newline, or &&
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git -c user.name=x push origin main"}}'           "deny: global-opt push origin main"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main > /tmp/log"}}'               "deny: push main then redirect"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main\ngit log"}}'                 "deny: push main then newline"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git stash && git push origin main"}}'             "deny: stash && push main"
+
 # --- FAIL-OPEN: malformed stdin (RC=0) ---
 assert_fail_open 'not json' "fail-open: malformed stdin"
 
