@@ -26,8 +26,15 @@ Denies:
         'main', $BR, line-split forms) — deliberately NOT chased with more patterns;
       - main/master are matched by convention, not by querying the repo's real default.
     What the floor DOES cover (and must): global-option prefixes the agent emits
-    naturally (git -C <path> push …, git -c k=v push …, git --no-pager push …) — the
-    anchor is \bgit\b…\bpush\b, not strict `git push` adjacency, so these do not slip.
+    naturally (git -C <path> push …, git -c k=v push …, git --no-pager push …) — only
+    global-option tokens are allowed between `git` and the `push` subcommand, so these
+    do not slip, while an intervening subcommand word (git commit … push …) breaks the
+    match. The check inspects ONLY the push command's own argument tokens, bounded at
+    the next shell operator / newline / redirection — never the surrounding command
+    text. So a commit message, PR body, or branch name that merely contains the words
+    "push" and "main" (e.g. a commit titled "scope push to main", or pushing the branch
+    `chore/ci-scope-push-to-main`) is not a false match — the class that motivated this
+    precision after it blocked benign work.
 
 Denials exit(2) with the reason on stderr. Per ADR-0016, only an exit(2) block is
 evaluated before the deny→ask→allow rule flow, so it overrides a matching allow rule
@@ -117,25 +124,47 @@ def check_opaque_exec(tool_name: str, tool_input: dict) -> str | None:
     return None
 
 
-# The anchor is \bgit\b[^|;&]*\bpush\b (git, then push later in the SAME command
-# segment — [^|;&]* does not cross a pipe/;/& separator), NOT \bgit\s+push\b. The
-# strict-adjacency form is bypassed by global options between git and the subcommand
-# (git -C <path> push …, git -c k=v push …, git --no-pager push …) — all common in
-# scripts and the exact forms a cross-worktree auto-mode agent emits. The segment guard
-# stops the wider anchor straddling a benign first command into a later push
-# (git checkout main && git push origin feature stays allow).
+# Match a REAL `git push` and inspect ONLY that push's own arguments — never the
+# surrounding command text. Two precision rules kill the false-positive class where the
+# words "push" and "main" merely co-occur (a commit message, PR body, or branch name):
+#
+#   _GIT_OPTS — between `git` and the `push` subcommand, allow ONLY global-option
+#   tokens, never an intervening bareword. So `git commit -m "scope push to main"` does
+#   not anchor (the bareword `commit` breaks the run), and a `push` sitting inside a
+#   message/heredoc has no `git`(+options) directly before it. Options that take a
+#   separate-token value are enumerated so the value is consumed, not read as the
+#   subcommand — preserving the forms the floor MUST cover (git -C <path> push …,
+#   git -c k=v push …, git --no-pager push …).
+#
+#   _PUSH_ARGS — after `push`, scan only this command's own argument tokens: stop at a
+#   shell operator (| ; &), a newline, or a redirection (< >). Without the bound the
+#   scan ran past the push into a following command or trailing prose and matched a
+#   `main` the push never targeted.
+#
+# Policy is unchanged (ADR-0020): deny force-push and push-to-default-branch only. The
+# documented string-layer limits above still apply, backstopped by `git push: ask`.
+_GIT_OPTS = (
+    r"(?:\s+(?:"
+    r"(?:-C|-c|--git-dir|--work-tree|--namespace|--exec-path|--super-prefix|--config-env)(?:=\S+|\s+\S+)"
+    r"|--[\w-]+(?:=\S+)?"
+    r"|-[A-Za-z]+"
+    r"))*"
+)
+_PUSH = r"\bgit\b" + _GIT_OPTS + r"\s+push\b"   # git, only global options, then the push subcommand
+_PUSH_ARGS = r"[^|;&\n<>]*"                       # this push's own args; never crosses into another command
+
 DANGEROUS_PUSH_PATTERNS = [
     # Force-push: --force (but NOT --force-with-lease / --force-if-includes, both the
     # safe lease-family flags allowed per policy — negative lookahead)
-    (r"\bgit\b[^|;&]*\bpush\b[^|;&]*\s--force(?!-with-lease|-if-includes)\b", "force-push (--force)"),
+    (_PUSH + _PUSH_ARGS + r"\s--force(?!-with-lease|-if-includes)\b", "force-push (--force)"),
     # Force-push: -f, incl. clustered short flags (-fu)
-    (r"\bgit\b[^|;&]*\bpush\b[^|;&]*\s-[a-zA-Z]*f", "force-push (-f)"),
+    (_PUSH + _PUSH_ARGS + r"\s-[a-zA-Z]*f", "force-push (-f)"),
     # Force-push via +-prefixed refspec: git push origin +main / +HEAD:main / +feature
-    (r"\bgit\b[^|;&]*\bpush\b[^|;&]*\s\+\S", "force-push (+refspec)"),
+    (_PUSH + _PUSH_ARGS + r"\s\+\S", "force-push (+refspec)"),
     # Push to default branch — destination side of a refspec is main/master (HEAD:main, feature:main)
-    (r"\bgit\b[^|;&]*\bpush\b[^|;&]*:(\+)?(refs/heads/)?(main|master)\b", "push to default branch (refspec dest)"),
+    (_PUSH + _PUSH_ARGS + r":(\+)?(refs/heads/)?(main|master)\b", "push to default branch (refspec dest)"),
     # Push to default branch — bare branch arg main/master (not the source side of a src:dst refspec)
-    (r"\bgit\b[^|;&]*\bpush\b[^|;&]*\s(\+)?(refs/heads/)?(main|master)(\s|$)", "push to default branch"),
+    (_PUSH + _PUSH_ARGS + r"\s(\+)?(refs/heads/)?(main|master)(\s|$)", "push to default branch"),
 ]
 
 
