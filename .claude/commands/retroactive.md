@@ -65,6 +65,10 @@ and a check sits fine at the latest layer, the gate.
 
 ## Phase 4 — Apply and record
 
+- Work on a `retroactive/<slug>` branch (never a `fix/*` or `feat/*` prefix). A retroactive
+  is a Harness change with no plan phase, and `retroactive/*` is exempt from the PIV
+  plan-file gate (`piv_check.sh`); a feature prefix would trip that gate at session end and
+  demand a plan that does not exist.
 - Make the edit to the relevant Harness file(s) — a check in `.claude/validate.sh` / the test
   suite, or an AI Layer rule/command/skill/example.
 - Add a concrete entry to `CLAUDE.md`'s "Do-not" / project-specifics list if a footgun
