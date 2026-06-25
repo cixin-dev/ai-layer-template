@@ -83,6 +83,14 @@ Two root causes, treated asymmetrically because only one is mechanically enforce
   produces a red mark but does not stop a merge by itself. Making `doc-gate` required (and
   keeping it a standalone, push-unmaskable job) is what gives the floor teeth; without it
   the gate is advisory (inert). (retroactive: inert-doc-gate)
+- **Plan constraint (this repo):** the repo is a free-plan *private* repo, where GitHub
+  disables required status checks entirely (branch-protection and rulesets APIs both return
+  `403 Upgrade to GitHub Pro or make this repository public`). So `doc-gate` cannot be made
+  required here until the repo goes public or onto Pro. Until then the floor is two
+  non-blocking signals: (a) the visible red `doc-gate` mark on the PR, and (b) a local
+  validate-time reminder (`scripts/doc_change_reminder.sh`, run by `validate.sh`) that fires
+  in-session when the branch touches `CONTEXT.md`/`docs/adr/`, before the PR is opened. The
+  reminder cannot read the PR body locally, so it reminds rather than blocks.
 - Residual risk: the routing contract and the `grill-with-docs` handoff contract are prose;
   an agent that ignores `CLAUDE.md` can still misroute. This is accepted — it matches the
   risk profile of every other prose rule in the system.

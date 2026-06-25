@@ -24,6 +24,7 @@ jobs:
           bash scripts/piv_check.test.sh
           bash scripts/notify.test.sh
           bash scripts/doc_change_gate.test.sh
+          bash scripts/doc_change_reminder.test.sh
 
   doc-gate:
     # Standalone, pull_request-only job so the gate is its OWN status check
