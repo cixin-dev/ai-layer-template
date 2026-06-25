@@ -113,6 +113,16 @@ On PASS:
    Include `Closes #{N}` only when the plan carries an Issue number. Pull the summary from
    the plan's `## Summary` section and the report path from
    `.agents/reports/{plan-name}-report.md`.
+
+   **Canonical-doc comprehension floor.** Before opening, check whether the branch touches
+   canonical docs:
+   `git diff --name-only origin/main...HEAD | grep -qE '^CONTEXT\.md$|^docs/adr/'`. If it
+   does, the PR body **must** include a `## 變更說明` section in Traditional Chinese — what
+   changed and why, in the author's language. Canonical docs stay English (zero-drift); the
+   TC summary is what lets the author confirm intent at review time without re-reading the
+   full English diff. This is the author's comprehension checkpoint at the human gate —
+   enforced by the author's PR review here, **not** by CI (see ADR-0022; the earlier CI gate
+   was retracted as over-design).
 3. **Share the PR URL** with reviewers.
 4. **Signal PASS** (best-effort — never gate the PR flow on it):
    `bash .claude/hooks/notify.sh pass "Validate PASS" "{branch}: PR ready"`. This rings the
