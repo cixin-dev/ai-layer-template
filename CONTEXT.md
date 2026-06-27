@@ -236,10 +236,50 @@ is the probabilistic inner layer, not the deterministic one — ADR-0020).
 **notification**:
 The boundary's **outbound signal to the operator** — the complement to the validate gate
 (**polling → interrupt**: a boundary event interrupts the operator so they stop polling the
-`dashboard`). One primitive (`notify.sh`) owns delivery; described on two axes — **transport**
+`dashboard` *by hand* — the "polling" retired here is the **human's** status-checking habit).
+One primitive (`notify.sh`) owns delivery; described on two axes — **transport**
 (*where*: the at-keyboard **tmux bell** and the AFK **network push**) and **source** (*what event*:
 **Source A** = the validate verdict, **Source B** = the PR-state watcher). A source reuses the
 transports; **adding a source must not touch a transport** (ADR-0021).
 _Avoid_: conflating transport and source (transport = delivery mechanism, source = triggering
 event — Source B reuses both transports); "sink" / "channel" (the pre-canonical names; Issue
-#40's "Channel A" is Source A); alert, ping.
+#40's "Channel A" is Source A); alert, ping; reading the retired "polling" as the Night Shift's
+**scheduling poll** (a *machine* backstop, not the human habit interrupt replaced).
+
+### Night Shift
+
+The posture above **Unattended Autonomy**: where Unattended Autonomy removed *input* friction (no
+per-tool-use approval inside the sandbox), the Night Shift removes *orchestration* friction (no
+per-phase human initiation). It drives each `ready`-labelled **Issue** through the whole **PIV
+Loop** — Plan → Implement → Validate — with no human between phases, then opens a PR and stops, so a
+queue of `ready` work drains itself overnight. Its load-bearing property is that **each phase runs
+in its own fresh, isolated session**: the loop automates the human's "open a new session and type
+the next command," and never chains phases in one long context — that would forfeit session
+isolation and rot the context (see **Ralph Loop**). The human keeps both bookends — the **Day
+Shift** loads the queue, the **boundary gate** reviews the PR. The loop advances event-driven on
+the happy path; a **scheduling poll** — a periodic machine sweep (*not* a human's
+dashboard-checking) — is the backstop that picks up newly-`ready` Issues and recovers dropped
+completion events (its runtime substrate stays a `/plan` decision; the loop's triggers *schedule*
+phases but never *judge* completion — ADR-0023).
+_Avoid_: "PIV Ralph Loop" (the PRD title — a descriptive label, not the canonical name);
+conflating with **Unattended Autonomy** (the layer below — that gates *inputs*; the Night Shift
+removes *orchestration*); a single long `/loop` session chaining phases (a naive **Ralph Loop**, no
+isolation).
+
+**Day Shift**:
+The human-attended planning input that loads the Night Shift's queue: write an **Issue** and add the
+`ready` label. The front bookend only; the back bookend (reviewing the PR) is the **boundary gate**,
+not the Day Shift.
+_Avoid_: stretching it to cover PR review (that is the **boundary gate**); reading it as a clock —
+it names the human's queue-loading work, not a time of day.
+
+**Ralph Loop**:
+The borrowed brute-force technique this project is contrasted *against* — run an agent in a
+`while`-loop that re-feeds the same prompt, letting it recover state from the filesystem and git
+and make incremental progress each pass. Its defining property: the **whole run shares one
+long-lived context — no session isolation between steps** — so attention rots as the loop grinds
+on. State-in-files, not state-in-memory; named after Ralph Wiggum (brute force, not cleverness).
+Term: Geoffrey Huntley ("Ralph").
+_Avoid_: equating it with the **Night Shift** — the Night Shift is a Ralph Loop that *keeps*
+per-phase session isolation, the one thing naive Ralph throws away; "PIV Ralph Loop" (the PRD
+title) is a descriptive label for our variant, not a third name for the Night Shift.
