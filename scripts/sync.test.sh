@@ -381,6 +381,22 @@ assert_contains "$output" "warn" "test(shared-f-ii): real run on unparseable set
 output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run 2>&1)"
 assert_contains "$output" "would" "test(shared-f-ii): dry-run on unparseable settings prints would lines"
 
+# --- Test (shared-g): the SHIPPED posture stays un-graduated — git push on `ask`, not `allow` ---
+# AC #1: graduation (ask→allow) is the operator's single deliberate edit to LIVE settings.
+# The versioned shared posture must never ship `git push` pre-graduated, or a sync would
+# silently graduate everyone and the on-switch would stop being a deliberate act.
+SHARED="$SCRIPT_DIR/../.claude/settings.shared.json"
+posture="$(python3 - "$SHARED" <<'PYEOF'
+import json, sys
+d = json.loads(open(sys.argv[1]).read())
+perm = d.get("permissions", {})
+print("PUSH_ON_ASK" if "Bash(git push *)" in perm.get("ask", []) else "PUSH_NOT_ON_ASK")
+print("PUSH_ON_ALLOW" if "Bash(git push *)" in perm.get("allow", []) else "PUSH_NOT_GRADUATED")
+PYEOF
+)"
+assert_contains "$posture" "PUSH_ON_ASK"        "test(shared-g): shipped posture keeps git push on ask"
+assert_not_contains "$posture" "PUSH_ON_ALLOW"  "test(shared-g): shipped posture must NOT pre-graduate git push to allow"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
 else
