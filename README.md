@@ -122,6 +122,31 @@ Project specifics section).
 > are not vendored here — they are external Claude Code skills (e.g. from the FleetView skill
 > registry) that you install separately into `~/.claude/skills/`.
 
+## Enabling the Night Shift (the push dial)
+
+The whole Night Shift has a **single on-switch**: graduating `git push` from `ask` to
+`allow`. Until you flip it, every push pauses for your approval — the human checkpoint.
+
+The shared posture ships **un-graduated** (`.claude/settings.shared.json` keeps
+`Bash(git push *)` on `ask`) and `sync.sh` never auto-graduates it, so enabling unattended
+push is always your deliberate act. To graduate, edit your **live**
+`~/.claude/settings.json` and move that one entry from `ask` to `allow`:
+
+```jsonc
+"permissions": {
+  "allow": [ "Bash(git push *)" ],   // ← moved here to enable the Night Shift
+  "ask":   [ /* git push removed */ ]
+}
+```
+
+A re-`sync` will not spring it back to `ask` — the merge is graduation-aware (ADR-0017).
+To turn the Night Shift back off, move the entry back to `ask`.
+
+Graduating benign push does **not** relax the hard floor: force-push and
+push-to-the-default-branch stay denied in every mode by `.claude/hooks/security_guard.py`
+(ADR-0020), which is independent of this dial. Confirm the floor with
+`bash scripts/security_guard.test.sh`.
+
 ## After syncing
 
 In each downstream repo:

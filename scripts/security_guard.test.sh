@@ -114,6 +114,27 @@ assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main >
 assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main\ngit log"}}'                 "deny: push main then newline"
 assert_deny '{"tool_name":"Bash","tool_input":{"command":"git stash && git push origin main"}}'             "deny: stash && push main"
 
+# --- DIAL-INDEPENDENCE: floor holds when benign push is graduated ask→allow (issue #59) ---
+# AC #2/#4: graduating `git push` ask→allow (the Night Shift on-switch, ADR-0017) must NOT
+# relax the dangerous-push floor. The hook never reads settings (see STRUCTURAL below), so
+# these denials hold in every dial state; the cases lock the canonical force/default pair.
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'  "deny: force-push to main holds when push graduated"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push -f origin feature"}}'     "deny: force-push to feature holds when push graduated"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'           "deny: push-to-default holds when push graduated"
+assert_deny '{"tool_name":"Bash","tool_input":{"command":"git push origin HEAD:master"}}'    "deny: push-to-default (master refspec) holds when push graduated"
+assert_allow '{"tool_name":"Bash","tool_input":{"command":"git push origin feature"}}'       "allow: benign feature push — the graduated path"
+
+# --- STRUCTURAL: the floor is independent of the permission dial (issue #59, AC #2/#4) ---
+# The deny floor must hold regardless of whether `git push` is graduated, because
+# security_guard.py reads ONLY the stdin tool payload — never settings.json / the permission
+# layer. Lock that: a change making the hook consult settings would couple floor to dial.
+forbidden="$(grep -nE 'settings\.json|permissions|defaultMode|open\(' "$HOOK" || true)"
+if [ -n "$forbidden" ]; then
+  echo "FAIL: structural: security_guard.py reads settings/permissions — floor must stay dial-independent:"
+  echo "$forbidden"
+  FAILURES=$((FAILURES + 1))
+fi
+
 # --- FAIL-OPEN: malformed stdin (RC=0) ---
 assert_fail_open 'not json' "fail-open: malformed stdin"
 
