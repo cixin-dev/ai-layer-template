@@ -103,6 +103,9 @@ On PASS:
    ## Summary
    {plan summary paragraph}
 
+   ## 變更說明
+   {Traditional Chinese: what changed and why}
+
    ## Report
    `.agents/reports/{plan-name}-report.md`
 
@@ -114,15 +117,13 @@ On PASS:
    the plan's `## Summary` section and the report path from
    `.agents/reports/{plan-name}-report.md`.
 
-   **Canonical-doc comprehension floor.** Before opening, check whether the branch touches
-   canonical docs:
-   `git diff --name-only origin/main...HEAD | grep -qE '^CONTEXT\.md$|^docs/adr/'`. If it
-   does, the PR body **must** include a `## 變更說明` section in Traditional Chinese — what
-   changed and why, in the author's language. Canonical docs stay English (zero-drift); the
-   TC summary is what lets the author confirm intent at review time without re-reading the
-   full English diff. This is the author's comprehension checkpoint at the human gate —
-   enforced by the author's PR review here, **not** by CI (see ADR-0022; the earlier CI gate
-   was retracted as over-design).
+   **Comprehension floor (every PR).** The PR body **must** always include a `## 變更說明`
+   section in Traditional Chinese — what changed and why, in the author's language. This is
+   the author's comprehension checkpoint at the human gate, enforced by the author's PR review
+   here, **not** by CI (see ADR-0022; a CI gate was retracted as over-design and is
+   unenforceable on a free-private repo). Canonical-doc PRs (`CONTEXT.md`, `docs/adr/`) are
+   the strongest case — those stay English for zero-drift, so the TC summary is the author's
+   only language bridge — but the floor applies to every PR, not just canonical-doc ones.
 3. **Share the PR URL** with reviewers.
 4. **Signal PASS** (best-effort — never gate the PR flow on it):
    `bash .claude/hooks/notify.sh pass "Validate PASS" "{branch}: PR ready"`. This rings the
