@@ -86,8 +86,12 @@ the main repo as the working directory.
 4b. `git branch -D {branch}` — `-D` (force-delete) is required because squash-merge does not
    create a merge commit on the feature branch; `-d` would fail with "not fully merged".
 5. `git worktree prune` — clean up any stale worktree references.
-6. `git push origin --delete {branch}` — if the remote branch is already gone (e.g.,
-   `delete_branch_on_merge` removed it), print a note and continue rather than failing.
+6. `git push origin --delete {branch} 2>/dev/null || echo "remote branch already gone — continuing"`
+   — the `|| echo` absorbs the expected "remote ref does not exist" when GitHub already
+   deleted the branch on merge (`delete_branch_on_merge`, the common case here), so the step
+   returns `0` instead of erroring or breaking a `&&`-chained run. Keep the resilience **in the
+   command**, not as a prose caveat on a bare `git push --delete` — a bare delete surfaces the
+   error and, when chained, aborts step 7.
 7. `git fetch --prune` — sync remote-tracking refs.
 
 ## Phase 4 — Confirm
