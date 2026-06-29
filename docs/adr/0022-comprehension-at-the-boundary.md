@@ -43,11 +43,11 @@ Two root causes, treated asymmetrically because only one is mechanically interce
    **never persisted into canonical files** — that would create a second drifting source of
    truth, the exact failure mode the English rule was written to prevent.
 
-3. **Comprehension floor at the human gate** — any PR that touches `CONTEXT.md` or
-   `docs/adr/` must include a `## 變更說明` section (Traditional Chinese, what changed and
-   why) in the PR body. This is required by `/validate` Phase 5 and enforced by the author's
-   PR review — the point where the author already gatekeeps every change. It is **not** a CI
-   gate (see Revision).
+3. **Comprehension floor at the human gate** — every PR must include a `## 變更說明` section
+   (Traditional Chinese, what changed and why) in the PR body. This is required by `/validate`
+   Phase 5 and enforced by the author's PR review — the point where the author already
+   gatekeeps every change. It is **not** a CI gate (see Revision). *(Scope broadened from
+   canonical-doc PRs to every PR on 2026-06-29 — see second Revision.)*
 
 4. **Routing contract in `CLAUDE.md`** — new feature ideas enter via `strategic-planning`
    (brain dump); `grill-with-docs` may only be invoked from a `strategic-planning` escalation
@@ -106,3 +106,20 @@ re-checks what the author already reviews at the PR. The floor belongs at the hu
 in CI. `doc_change_gate.sh` and its CI wiring were removed; the requirement moved to
 `/validate` Phase 5. Decisions #3 and #5 above reflect the revised design; #1, #2, and #4 are
 unchanged.
+
+## Revision (2026-06-29)
+
+The comprehension floor was scoped to PRs touching `CONTEXT.md` or `docs/adr/`. A feature PR
+(#65, closing #56) merged with no `## 變更說明` — correct under the old scope, but the author
+wanted comprehension in their language for *that* change too. The original scope conflated two
+distinct needs: the **zero-drift bridge** (canonical docs stay English, so a TC summary is the
+author's only language path into the diff) and the **comprehension floor** (the author should
+understand every change they gatekeep in their own language). The first is canonical-doc
+specific; the second is universal — the author is the gatekeeper of *every* PR (Context, above).
+
+Decision #3's scope is broadened: **every** PR body must carry a `## 變更說明` section, not just
+canonical-doc PRs. The `/validate` Phase 5 PR template now emits the section unconditionally.
+Everything else holds: TC stays out of canonical files (#2), and the floor remains prose at the
+human gate — **no** CI gate (#5). The free-private-repo unenforceability and the
+re-checks-what-the-author-reviews redundancy that retracted the CI gate apply identically at the
+broader scope, so broadening the floor does **not** reopen the CI-gate question.
