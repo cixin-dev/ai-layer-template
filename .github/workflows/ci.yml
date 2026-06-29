@@ -22,3 +22,4 @@ jobs:
           bash scripts/piv_check.test.sh
           bash scripts/notify.test.sh
           bash scripts/night_shift_decide.test.sh
+          bash scripts/loop_state.test.sh
