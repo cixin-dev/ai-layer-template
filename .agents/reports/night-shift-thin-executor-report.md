@@ -83,11 +83,27 @@ claim/PR state via markers; a shared TIMELINE log proves ordering (claim-before-
 | Tasks 2 & 6 (live probes) handed to the operator rather than run in this session. | They consume subscription credit (nested `claude -p`), open a real PR, and need a throwaway `ready` Issue + the dedicated Night Shift clone + graduated push posture. Outward-facing + hard-to-reverse ⇒ explicit authorization required. Deterministic code is fully unit-verified independently. |
 
 ## Go/No-Go
-🟡 **Unit GREEN; end-to-end PENDING.** All deterministic seams are verified offline and regressions
-are green — the executor is structurally complete and the substrate is recorded (ADR-0024). The
-plan's acceptance criterion "end-to-end behavior verified (Task 6 probe)" is **not yet met**: the
-live Seam-3 probes must run on the operator's dedicated Night Shift clone (subscription auth, no
-`ANTHROPIC_API_KEY`, graduated push) against a throwaway `ready` Issue, observing 3 distinct
-`claude -p` processes, a worktree at `../<repo>-feat/61-<slug>`, plan seeded as first commit, branch
-pushed, PR opened (never merged), `pr-ready` notify fired, `in-progress` removed on terminal. Record
-those results here before declaring #61 done.
+✅ **GO — unit GREEN + end-to-end VERIFIED.** Live Seam-3 probes run 2026-06-30 on the dedicated
+Night Shift clone (`~/night-shift/ai-layer-template`, claude.ai subscription, `ANTHROPIC_API_KEY`
+stripped via `env -u`, graduated push `allow` + ADR-0020 deny-floor on), throwaway Issue **#73**:
+
+- **Task 2 gate** — headless `/plan 73` expanded and ran unattended: exit 0, no permission stall,
+  wrote `.agents/plans/ns-probe-greeting-helper.plan.md` in the clone.
+- **Task 6 full drive** — `night_shift_run.sh 73` → exit 0, `done: #73 (released in-progress)`:
+  - claim (`in-progress`) added **before** any dispatch; removed on terminal (final labels:
+    `ready-for-agent` only).
+  - **3 distinct `claude -p` phase sessions** in PIV order (`/plan` PID 3251113 → `/implement` →
+    `/validate` PID 3256318 observed live); `73.state` final `phase=validate`.
+  - worktree `…-feat/73-ns-probe-greeting-helper` created beside the clone.
+  - plan is the branch's **first** commit (`5c1d999 docs(plan): add …`), then implement
+    (`f9980e2 feat(night-shift): … (#73)`), then `/validate` archived the plan on a green gate
+    (`84a1036 docs(plan): archive …`).
+  - branch pushed to origin; PR **#74 OPEN, never merged** (`mergedAt=null`).
+  - `pr-ready`/PASS signal fired (best-effort); **no phase advanced by hand**.
+
+Plan acceptance criterion "end-to-end behavior verified (Task 6 probe)" **met** — #61 ready to
+declare done. PR #74 + Issue #73 are disposable (closed unmerged at teardown).
+
+> Runbook nit (→ retroactive): §5's first-commit check `git log --reverse <branch> | head -1` walks
+> from the repo root and returns `Initial commit`; the scoped form `git log --reverse main..<branch>
+> | head -1` is what actually verifies "plan is the branch's first commit".
