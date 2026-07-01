@@ -98,6 +98,11 @@ gather_snapshot() {  # N → KEY=value lines
   root="$(_artifact_root "$branch")"
 
   local issue_ready=0 plan_present=0 report_present=0 gate=unrun pr_open=0
+  local phase escalated attempts
+  phase="$(bash "$STORE" get-phase "$n")"
+  escalated="$(bash "$STORE" get-escalated "$n")"
+  attempts="$(bash "$STORE" get-attempts "$n")"
+
   _has_label "$n" "$TRIGGER_LABEL" && issue_ready=1
   if [ -n "$slug" ]; then
     if [ -f "$root/.agents/plans/${slug}.plan.md" ] \
@@ -105,7 +110,11 @@ gather_snapshot() {  # N → KEY=value lines
       plan_present=1
     fi
     [ -f "$root/.agents/reports/${slug}-report.md" ] && report_present=1
-    [ -f "$root/.agents/plans/completed/${slug}.plan.md" ] && gate=green
+    if [ -f "$root/.agents/plans/completed/${slug}.plan.md" ]; then
+      gate=green
+    elif [ "$phase" = "validate" ] && [ "$report_present" = "1" ] && [ "$escalated" != "1" ]; then
+      gate=red
+    fi
   fi
   [ -n "$branch" ] && _pr_open "$branch" && pr_open=1
 
@@ -114,7 +123,8 @@ gather_snapshot() {  # N → KEY=value lines
   printf 'REPORT_PRESENT=%s\n' "$report_present"
   printf 'GATE=%s\n'           "$gate"
   printf 'PR_OPEN=%s\n'        "$pr_open"
-  printf 'ESCALATED=%s\n'      "0"
+  printf 'ESCALATED=%s\n'      "$escalated"
+  printf 'ATTEMPTS=%s\n'       "$attempts"
 }
 
 # --- dispatch: perform exactly the action the decider chose ------------------

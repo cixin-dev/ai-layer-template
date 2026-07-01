@@ -154,7 +154,7 @@ assert_eq "$(field "$snap" PLAN_PRESENT)"   "0"     "(A4) no plan → PLAN_PRESE
 assert_eq "$(field "$snap" REPORT_PRESENT)" "0"     "(A4) no report → REPORT_PRESENT=0"
 assert_eq "$(field "$snap" GATE)"           "unrun" "(A4) no completed → GATE=unrun"
 assert_eq "$(field "$snap" PR_OPEN)"        "0"     "(A4) no PR → PR_OPEN=0"
-assert_eq "$(field "$snap" ESCALATED)"      "0"     "(A4) ESCALATED hard-wired 0"
+assert_eq "$(field "$snap" ESCALATED)"      "0"     "(A4) no escalation marker → ESCALATED=0"
 
 # (A5) post-plan draft: plan present, no report.
 R="$(mktemp -d "$WORK/postplan.XXXXXX")"
@@ -202,6 +202,57 @@ mkdir -p "$WT/.agents/reports"
 : > "$WT/.agents/reports/the-feature-report.md"
 snap="$(NIGHT_SHIFT_ROOT="$R" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
 assert_eq "$(field "$snap" REPORT_PRESENT)" "1"      "(A9) report read from worktree, not ROOT"
+
+# (A-red) phase=validate + report present + no completed/ + no escalation → GATE=red.
+R="$(mkrepo)"; git -C "$R" branch feat/61-red-feature
+WT_RED="$WORK/wt-red"; git -C "$R" worktree add -q "$WT_RED" feat/61-red-feature
+mkdir -p "$WT_RED/.agents/plans" "$WT_RED/.agents/reports"
+printf '| Issue | #61 |\n' > "$WT_RED/.agents/plans/red-feature.plan.md"
+: > "$WT_RED/.agents/reports/red-feature-report.md"
+ST_RED="$WORK/state-red"
+NIGHT_SHIFT_STATE_DIR="$ST_RED" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+snap="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST_RED" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)"      "red" "(A-red) phase=validate + report + no completed → GATE=red"
+assert_eq "$(field "$snap" ESCALATED)" "0"   "(A-red) no escalation marker → ESCALATED=0"
+
+# (A-green-prec) completed/ present + phase=validate → GATE=green (green takes precedence).
+R2="$(mkrepo)"; git -C "$R2" branch feat/61-red-feature
+WT_GP="$WORK/wt-gp"; git -C "$R2" worktree add -q "$WT_GP" feat/61-red-feature
+mkdir -p "$WT_GP/.agents/plans/completed" "$WT_GP/.agents/reports"
+: > "$WT_GP/.agents/plans/completed/red-feature.plan.md"
+: > "$WT_GP/.agents/reports/red-feature-report.md"
+ST_GP="$WORK/state-gp"
+NIGHT_SHIFT_STATE_DIR="$ST_GP" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+snap="$(NIGHT_SHIFT_ROOT="$R2" NIGHT_SHIFT_STATE_DIR="$ST_GP" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)" "green" "(A-green-prec) completed/ present overrides phase=validate → GATE=green"
+
+# (A-esc) escalated + phase=validate + report → GATE not red (unrun); ESCALATED=1.
+R3="$(mkrepo)"; git -C "$R3" branch feat/61-red-feature
+WT_ESC="$WORK/wt-esc"; git -C "$R3" worktree add -q "$WT_ESC" feat/61-red-feature
+mkdir -p "$WT_ESC/.agents/plans" "$WT_ESC/.agents/reports"
+printf '| Issue | #61 |\n' > "$WT_ESC/.agents/plans/red-feature.plan.md"
+: > "$WT_ESC/.agents/reports/red-feature-report.md"
+ST_ESC="$WORK/state-esc"
+NIGHT_SHIFT_STATE_DIR="$ST_ESC" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+NIGHT_SHIFT_STATE_DIR="$ST_ESC" bash "$SCRIPT_DIR/loop_state.sh" set-escalated 61
+snap="$(NIGHT_SHIFT_ROOT="$R3" NIGHT_SHIFT_STATE_DIR="$ST_ESC" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)"      "unrun" "(A-esc) escalated suppresses red → GATE=unrun"
+assert_eq "$(field "$snap" ESCALATED)" "1"     "(A-esc) set-escalated → ESCALATED=1 in snapshot"
+
+# (A-attempts) incr-attempts × 2 → snapshot emits ATTEMPTS=2.
+R4="$(mkrepo)"; git -C "$R4" branch feat/61-the-feature
+ST_ATT="$WORK/state-att"
+NIGHT_SHIFT_STATE_DIR="$ST_ATT" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+NIGHT_SHIFT_STATE_DIR="$ST_ATT" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+snap="$(NIGHT_SHIFT_ROOT="$R4" NIGHT_SHIFT_STATE_DIR="$ST_ATT" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" ATTEMPTS)" "2" "(A-attempts) two incr-attempts → ATTEMPTS=2 in snapshot"
+
+# (A-noesc) fresh task → ESCALATED=0 and ATTEMPTS=0 in snapshot.
+R5="$(mkrepo)"; git -C "$R5" branch feat/61-the-feature
+ST_NOESC="$WORK/state-noesc"
+snap="$(NIGHT_SHIFT_ROOT="$R5" NIGHT_SHIFT_STATE_DIR="$ST_NOESC" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" ESCALATED)" "0" "(A-noesc) fresh task → ESCALATED=0"
+assert_eq "$(field "$snap" ATTEMPTS)"  "0" "(A-noesc) fresh task → ATTEMPTS=0"
 
 # =============================================================================
 # Slice B — dispatch (one decision → the correct command in the correct cwd)
