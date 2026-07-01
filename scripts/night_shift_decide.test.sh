@@ -18,18 +18,6 @@ check() {
   fi
 }
 
-# Run the decider and assert it exits with $code.
-check_exit() {
-  local code="$1" desc="$2"
-  shift 2
-  local actual=0
-  env -i "$@" bash "$DECIDER" >/dev/null 2>&1 || actual=$?
-  if [ "$actual" != "$code" ]; then
-    echo "FAIL: $desc (expected exit $code, got $actual)"
-    FAILURES=$((FAILURES + 1))
-  fi
-}
-
 # ---------------------------------------------------------------------------
 # Happy-path edges
 # ---------------------------------------------------------------------------
@@ -49,9 +37,35 @@ check "open-pr" "green gate beats report present → open-pr" GATE=green REPORT_
 check "run-implement" "ISSUE_READY=0 with plan → run-implement (loop proceeds once started)" ISSUE_READY=0 PLAN_PRESENT=1
 
 # ---------------------------------------------------------------------------
-# Boundary marker: red gate is out-of-scope this slice → exit 2
+# Retry ladder (red gate)
 # ---------------------------------------------------------------------------
-check_exit 2 "red gate exits 2 (deferred retry ladder)"  GATE=red REPORT_PRESENT=1
+check "retry-reimplement" "first red (ATTEMPTS=1) → retry-reimplement"  GATE=red ATTEMPTS=1 REPORT_PRESENT=1
+check "retry-replan"      "second red (ATTEMPTS=2) → retry-replan"       GATE=red ATTEMPTS=2 REPORT_PRESENT=1
+check "escalate"          "third red (ATTEMPTS=3, default K) → escalate" GATE=red ATTEMPTS=3 REPORT_PRESENT=1
+check "escalate"          "overshoot (ATTEMPTS=4) still escalates"       GATE=red ATTEMPTS=4 REPORT_PRESENT=1
+
+# Threshold exactly at K boundary
+check "retry-replan" "ATTEMPTS=2 < K=3 → retry-replan (not yet escalate)" GATE=red ATTEMPTS=2 REPORT_PRESENT=1
+check "escalate"     "ATTEMPTS=3 = K=3 → escalate (exactly at K)"         GATE=red ATTEMPTS=3 REPORT_PRESENT=1
+
+# Configurable K
+check "escalate"          "K=2: ATTEMPTS=2 >= K → escalate"                  GATE=red ATTEMPTS=2 MAX_ATTEMPTS=2 REPORT_PRESENT=1
+check "retry-replan"      "K=5: ATTEMPTS=4 < K → retry-replan"               GATE=red ATTEMPTS=4 MAX_ATTEMPTS=5 REPORT_PRESENT=1
+
+# Defensive: ATTEMPTS=0 (contract violation, red implies >= 1 attempt) → retry-reimplement
+check "retry-reimplement" "defensive ATTEMPTS=0 → retry-reimplement"          GATE=red ATTEMPTS=0 REPORT_PRESENT=1
+
+# Precedence: red ladder loses to terminal states
+check "noop" "PR_OPEN beats red ladder → noop"       GATE=red ATTEMPTS=2 PR_OPEN=1
+check "noop" "ESCALATED beats red ladder → noop"     GATE=red ATTEMPTS=2 ESCALATED=1
+
+# Idempotency: same env twice → same output
+out1="$(env -i GATE=red ATTEMPTS=2 REPORT_PRESENT=1 bash "$DECIDER" 2>/dev/null)"
+out2="$(env -i GATE=red ATTEMPTS=2 REPORT_PRESENT=1 bash "$DECIDER" 2>/dev/null)"
+if [ "$out1" != "$out2" ]; then
+  echo "FAIL: idempotency: two runs of same red+attempts env differ ('$out1' vs '$out2')"
+  FAILURES=$((FAILURES + 1))
+fi
 
 # ---------------------------------------------------------------------------
 # Footer
