@@ -21,6 +21,7 @@ jobs:
           bash scripts/security_guard.test.sh
           bash scripts/piv_check.test.sh
           bash scripts/notify.test.sh
+          bash scripts/notify_contract.test.sh
           bash scripts/night_shift_decide.test.sh
           bash scripts/loop_state.test.sh
           bash scripts/night_shift_run.test.sh

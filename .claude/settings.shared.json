@@ -10,21 +10,5 @@
     "ask": [
       "Bash(git push *)"
     ]
-  },
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Permission needed'" }
-        ]
-      },
-      {
-        "matcher": "idle_prompt",
-        "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Waiting for input'" }
-        ]
-      }
-    ]
   }
 }
