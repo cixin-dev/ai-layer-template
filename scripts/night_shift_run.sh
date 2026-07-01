@@ -237,6 +237,12 @@ run() {
   local i
   for (( i = 1; i <= MAX_ITERS; i++ )); do
     snap="$(gather_snapshot "$n")"
+    # Advance attempt counter on red before the decider reads it, then re-gather
+    # so the snapshot forwarded to the decider reflects the incremented ATTEMPTS.
+    if [ "$(_field "$snap" GATE)" = "red" ]; then
+      bash "$STORE" incr-attempts "$n" >/dev/null
+      snap="$(gather_snapshot "$n")"
+    fi
     rc=0; decision="$(_decide "$snap")" || rc=$?
     if [ "$rc" -ne 0 ]; then
       echo "decider exited $rc for #$n (out of scope this slice)" >&2
@@ -244,11 +250,11 @@ run() {
     fi
     case "$decision" in
       noop)
-        _release "$n"          # terminal (PR open) → drop the claim
+        _release "$n"          # terminal (PR open or escalated) → drop the claim
         echo "done: #$n (released $CLAIM_LABEL)"
         return 0
         ;;
-      run-plan|run-implement|run-validate|open-pr)
+      run-plan|run-implement|run-validate|open-pr|retry-reimplement|retry-replan|escalate)
         dispatch "$decision" "$n"
         ;;
       *)

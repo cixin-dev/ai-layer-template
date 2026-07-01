@@ -108,11 +108,14 @@ if [ "${SIM_MODE:-0}" = "1" ]; then
       mkdir -p "$SIM_ROOT/.agents/reports"
       : > "$SIM_ROOT/.agents/reports/$SIM_SLUG-report.md" ;;
     *"/validate "*)
-      mkdir -p "$SIM_ROOT/.agents/plans/completed"
-      mv "$SIM_ROOT/.agents/plans/$SIM_SLUG.plan.md" \
-         "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md" 2>/dev/null \
-         || : > "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md"
-      : > "$SIM_STATE/pr-open" ;;
+      # SIM_FAIL_VALIDATE=1 leaves validate as a no-op (never greens) to simulate red gate.
+      if [ "${SIM_FAIL_VALIDATE:-0}" != "1" ]; then
+        mkdir -p "$SIM_ROOT/.agents/plans/completed"
+        mv "$SIM_ROOT/.agents/plans/$SIM_SLUG.plan.md" \
+           "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md" 2>/dev/null \
+           || : > "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md"
+        : > "$SIM_STATE/pr-open"
+      fi ;;
   esac
 fi
 exit 0
@@ -453,6 +456,46 @@ OUT="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$WORK/state-c5" \
         bash "$RUN" run 61 2>&1)" || RC=$?
 assert_eq "$RC" "3" "(C5) runaway hits MAX_ITERS → exit 3"
 assert_eq "$(printf '%s\n' "$(cat "$TL")" | grep -c 'claude .*args=/plan')" "3" "(C5) stopped after exactly MAX_ITERS iterations"
+
+# (C-fail) full failure-path drive: red gate → retry ladder → escalation → terminal no-op.
+# Validate never greens (SIM_FAIL_VALIDATE=1): plan+impl+val → red×1 (reimpl) →
+# val → red×2 (replan) → impl+val → red×3 (escalate) → noop. Second run is pure noop.
+R="$(mkrepo)"; git -C "$R" branch feat/61-foo
+ST_CF="$WORK/sim-c-fail"; mkdir -p "$ST_CF"
+STATE_CF="$WORK/state-c-fail"
+TL_CF="$WORK/tl-c-fail"; NLOG_CF="$WORK/nlog-c-fail"; : > "$TL_CF"; : > "$NLOG_CF"
+RC=0
+OUT_CF="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$STATE_CF" \
+            FAKE_LABELS="ready-for-agent" SIM_STATE="$ST_CF" TIMELINE="$TL_CF" \
+            SIM_MODE=1 SIM_FAIL_VALIDATE=1 SIM_N=61 SIM_SLUG=foo SIM_ROOT="$R" \
+            NOTIFY_LOG="$NLOG_CF" NIGHT_SHIFT_NOTIFY="$BIN/notify" \
+            NIGHT_SHIFT_MAX_ATTEMPTS=3 \
+            bash "$RUN" run 61 2>&1)" || RC=$?
+tl_cf="$(cat "$TL_CF")"
+nlog_cf="$(cat "$NLOG_CF")"
+assert_eq "$RC" "0" "(C-fail) failure drive → exit 0"
+assert_contains "$OUT_CF" "done: #61" "(C-fail) reaches terminal done"
+# exactly one escalation notify
+assert_eq "$(printf '%s\n' "$nlog_cf" | grep -c 'notify')" "1" "(C-fail) exactly one notify call"
+assert_contains "$nlog_cf" "fail"     "(C-fail) notify level=fail"
+assert_contains "$nlog_cf" "validate" "(C-fail) notify message contains phase"
+assert_contains "$nlog_cf" "3"        "(C-fail) notify message contains attempt count (3)"
+# escalated marker persists across the run
+assert_eq "$(NIGHT_SHIFT_STATE_DIR="$STATE_CF" bash "$SCRIPT_DIR/loop_state.sh" get-escalated 61)" \
+          "1" "(C-fail) escalated=1 persists after run"
+# retry order: retry-reimplement (/implement) fires before retry-replan (/plan)
+first_val_ln="$(awk '/args=\/validate /{print NR; exit}' "$TL_CF")"
+first_retry_cmd="$(awk -v n="$first_val_ln" 'NR>n && /args=\//{ print; exit }' "$TL_CF")"
+assert_contains "$first_retry_cmd" "/implement" "(C-fail) first retry after red gate is /implement (retry-reimplement)"
+replan_line="$(awk -v n="$first_val_ln" 'NR>n && /args=\/plan /{ print; exit }' "$TL_CF")"
+assert_contains "$replan_line" "/plan" "(C-fail) retry-replan (/plan) fires during ladder"
+# second run is a pure no-op: claim → noop (ESCALATED=1) → release; no new notify
+OUT_CF2="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$STATE_CF" \
+              FAKE_LABELS="ready-for-agent" SIM_STATE="$ST_CF" \
+              NOTIFY_LOG="$NLOG_CF" NIGHT_SHIFT_NOTIFY="$BIN/notify" \
+              bash "$RUN" run 61 2>&1)"
+assert_contains "$OUT_CF2" "done: #61" "(C-fail) second run → done (noop)"
+assert_eq "$(cat "$NLOG_CF" | grep -c 'notify')" "1" "(C-fail) no second notify on re-run"
 
 # --- summary -----------------------------------------------------------------
 if [ "$FAILURES" -eq 0 ]; then
