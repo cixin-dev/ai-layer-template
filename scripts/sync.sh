@@ -149,16 +149,12 @@ if ! command -v python3 >/dev/null 2>&1; then
     note "would wire hook: Stop -> validate_gate.py"
     note "would set defaultMode: auto"
     note "would add ask: Bash(git push *)"
-    note "would add Notification hook: permission_prompt"
-    note "would add Notification hook: idle_prompt"
   else
     note "warn: python3 not found — wire hooks manually by adding to $SETTINGS:"
     note "  PreToolUse: $SG_CMD"
     note "  Stop: $VG_CMD"
     note "  permissions.defaultMode: auto"
     note "  permissions.ask: Bash(git push *)"
-    note "  hooks.Notification[permission_prompt]: \"\$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Permission needed'"
-    note "  hooks.Notification[idle_prompt]: \"\$HOME/.claude/hooks/notify.sh\" info 'Claude Code' 'Waiting for input'"
   fi
 else
   python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$SHARED_SETTINGS" <<'PYEOF'
