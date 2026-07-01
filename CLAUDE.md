@@ -96,7 +96,11 @@ clarification.
 **Verification-led.** Rate of feedback is your speed limit. Define how you'll verify work
 *before* doing it. A claim about how a third-party or external component behaves when
 integrated (idempotent, compatible, side-effect-free) is not grounded until a probe has run
-it — assert it only after the experiment, never from docs or reasoning alone. Prefer
+it — assert it only after the experiment, never from docs or reasoning alone. A **check
+command is itself such a claim** — it asserts it can distinguish pass from fail — and is
+ungrounded until run against a **known-good and a known-bad** case and seen to flip; never
+trust or ship a GO-checklist or operator-card check that was only reasoned about, never
+executed. Prefer
 test-driven, vertical tracer-bullet slices (one test → one implementation → repeat) over
 writing all tests up front. See
 [`.claude/skills/tdd-gate/SKILL.md`](.claude/skills/tdd-gate/SKILL.md) and
@@ -123,3 +127,4 @@ Fill these in per project. Keep it short.
   - Never cold-start `grill-with-docs` as a feature entry point — it may only be invoked from a `strategic-planning` escalation handoff; every feature idea enters via `strategic-planning` (brain dump) first. Cold-starting `grill-with-docs` is the misrouting that inflates canonical docs silently (retroactive: comprehension-at-the-boundary).
   - Canonical docs (`CONTEXT.md`, ADRs) stay English — **never persist Chinese translations into canonical files**, which would create a second drifting source of truth (retroactive: comprehension-at-the-boundary).
   - Every PR body must include a Traditional Chinese `## 變更說明` section (what changed and why) — the author's comprehension checkpoint at the human gate. Authored by `/validate` Phase 5; carried by the author's PR review, not CI (retroactive: zh-summary-every-pr, ADR-0022).
+  - Never ship a GO-checklist / operator-card check command that was never executed — a check is a behavioral claim (it asserts it can tell pass from fail) and is ungrounded until dry-run against a **known-good AND known-bad** case. The #61 live Seam-3 probe verified the executor, yet its own runbook's checks were unrun: §5's `git log --reverse <branch>` walked from the root commit and returned "Initial commit", silently never verifying "plan is the branch's first commit." (retroactive: verify-check-commands)
