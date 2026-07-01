@@ -29,6 +29,9 @@ claude -p "reply with the single token SUBOK" < /dev/null   # expect: SUBOK, exi
 
 # (c) Graduated push posture (#59): Bash(git push *) = allow in the USER-scope dial.
 #     (Project/local-scope defaultMode:auto is ignored — spike-autonomy-probes-report.md.)
+#     OPERATOR MUST FLIP THIS BY HAND: an agent editing ~/.claude/settings.json to turn push
+#     ask→allow is blocked as [Self-Modification], and routing it via Bash defeats the guard —
+#     so the agent cannot set this up. See memory night-shift-probe-push-dial-self-mod.md.
 
 # (d) Dedicated clone, separate from your working checkout, on main:
 git clone <same-remote-as-this-repo> ~/night-shift/ai-layer-template   # = NS_CLONE
@@ -105,11 +108,12 @@ cat "$NS_CLONE/.night-shift/$N.state"
 # 3 fresh phase sessions: watch live in another shell during the run
 #   watch -n1 'pgrep -af "claude -p"'
 
-# worktree created beside the clone
-git -C "$NS_CLONE" worktree list                       # → ../ai-layer-template-feat$N-<slug>
+# worktree created beside the clone (dir mirrors the branch, so the path carries a slash)
+git -C "$NS_CLONE" worktree list                       # → entry on feat/$N-<slug>, dir ../ai-layer-template-feat/$N-<slug>
 
-# plan is the branch's FIRST commit
-git -C "$NS_CLONE" log --oneline --reverse feat/$N-<slug> | head -1   # → docs(plan): add ...
+# plan is the branch's FIRST commit (scope to main.. — a bare branch walks from the
+# root commit and returns "Initial commit", never verifying the claim)
+git -C "$NS_CLONE" log --oneline --reverse main..feat/$N-<slug> | head -1   # → docs(plan): add ...
 
 # branch pushed + PR opened, and NEVER merged
 gh pr list --head "feat/$N-<slug>" --state open --json number,url
@@ -142,7 +146,9 @@ git commit -m "docs(report): record live Seam-3 probe Go/No-Go for #61"
 ```bash
 gh pr close <PR#> --delete-branch        # discard the throwaway PR + its remote branch, UNMERGED
 gh issue close $N                        # close the throwaway Issue
-git -C "$NS_CLONE" worktree remove ../ai-layer-template-feat$N-<slug>   # or: /clean-worktree
+# The worktree dir mirrors the branch (carries a slash) — resolve it, never hardcode a path:
+WT=$(git -C "$NS_CLONE" worktree list --porcelain | bash "$NS_CLONE/scripts/worktree_path.sh" "feat/$N-<slug>")
+git -C "$NS_CLONE" worktree remove "$WT"
 # the dedicated clone itself can stay for future Night Shift use
 ```
 NO-GO path: keep the artifacts for diagnosis instead of tearing down, and escalate.
