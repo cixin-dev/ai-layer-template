@@ -32,6 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 CLAUDE="${NIGHT_SHIFT_CLAUDE:-claude}"
 GH="${NIGHT_SHIFT_GH:-gh}"
+NOTIFY="${NIGHT_SHIFT_NOTIFY:-$SCRIPT_DIR/../.claude/hooks/notify.sh}"
 ROOT="${NIGHT_SHIFT_ROOT:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)}"
 TRIGGER_LABEL="${NIGHT_SHIFT_TRIGGER_LABEL:-ready-for-agent}"
 CLAIM_LABEL="${NIGHT_SHIFT_CLAIM_LABEL:-in-progress}"
@@ -152,14 +153,17 @@ dispatch() {  # decision N
   slug="$(resolve_slug "$n")"
   branch=""; [ -n "$slug" ] && branch="feat/${n}-${slug}"
   case "$decision" in
-    run-plan)
-      # Runs in the clone main checkout: /plan writes the draft here.
-      claude_run "$ROOT" "/plan ${n}"
+    run-plan|retry-replan)
+      # run-plan: clone root (no worktree yet); retry-replan: worktree (retries happen there).
+      dir="$(_artifact_root "$branch")"
+      claude_run "$dir" "/plan ${n}"
       bash "$STORE" set-phase "$n" plan
       ;;
-    run-implement)
-      # Also the clone main checkout: /implement branches + creates the worktree from here.
-      claude_run "$ROOT" "/implement ${ROOT}/.agents/plans/${slug}.plan.md"
+    run-implement|retry-reimplement)
+      # run-implement: ROOT before worktree exists; retry-reimplement: worktree.
+      dir="$(_artifact_root "$branch")"
+      pp="$(_plan_path_in "$dir" "$slug")"
+      claude_run "$dir" "/implement ${pp}"
       bash "$STORE" set-phase "$n" implement
       ;;
     run-validate)
@@ -174,6 +178,14 @@ dispatch() {  # decision N
       dir="$(_artifact_root "$branch")"
       pp="$(_plan_path_in "$dir" "$slug")"
       claude_run "$dir" "/validate ${pp}"
+      ;;
+    escalate)
+      # Notify first (bias to delivery), then mark to prevent duplicates.
+      local phase attempts
+      phase="$(bash "$STORE" get-phase "$n")"
+      attempts="$(bash "$STORE" get-attempts "$n")"
+      "$NOTIFY" fail "Night Shift escalation" "#${n}: ${phase} gate red after ${attempts} attempts — needs human triage" || true
+      bash "$STORE" set-escalated "$n"
       ;;
     noop)
       : # terminal; main releases the claim
