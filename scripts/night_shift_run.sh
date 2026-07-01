@@ -35,7 +35,9 @@ GH="${NIGHT_SHIFT_GH:-gh}"
 ROOT="${NIGHT_SHIFT_ROOT:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)}"
 TRIGGER_LABEL="${NIGHT_SHIFT_TRIGGER_LABEL:-ready-for-agent}"
 CLAIM_LABEL="${NIGHT_SHIFT_CLAIM_LABEL:-in-progress}"
-MAX_ITERS="${NIGHT_SHIFT_MAX_ITERS:-6}"
+MAX_ATTEMPTS_K="${NIGHT_SHIFT_MAX_ATTEMPTS:-3}"  # mirrors decider default K; executor is source of truth
+# Worst-case ladder: plan+impl+val + (reimpl+val)×K-2 + (replan+impl+val) + noop = 3*K+6
+MAX_ITERS="${NIGHT_SHIFT_MAX_ITERS:-$(( 3 * MAX_ATTEMPTS_K + 6 ))}"
 DECIDER="$SCRIPT_DIR/night_shift_decide.sh"
 STORE="$SCRIPT_DIR/loop_state.sh"
 
@@ -198,6 +200,8 @@ _decide() {  # snapshot-blob → decision on stdout; the decider's exit propagat
     GATE="$(_field "$snap" GATE)" \
     PR_OPEN="$(_field "$snap" PR_OPEN)" \
     ESCALATED="$(_field "$snap" ESCALATED)" \
+    ATTEMPTS="$(_field "$snap" ATTEMPTS)" \
+    MAX_ATTEMPTS="$MAX_ATTEMPTS_K" \
     bash "$DECIDER"
 }
 
