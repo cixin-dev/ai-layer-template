@@ -68,16 +68,16 @@ E2E plan section. A runbook/operator-card grounding block is free-floating prose
 2. **Re-run each grounding/check block.** For every "Grounding evidence" / GO-checklist /
    check-command block in those files, actually execute the known-good **and** known-bad
    cases. Treat any pasted `# → observed:` as **unverified until reproduced**.
-3. **Demand a flip for the right reason.** A pass requires the two cases to differ *because
-   the check ran* — assert the return code (or that the outputs genuinely diverge), not
-   merely that output changed. A flip whose known-good and known-bad **coincide** in output
-   under a swallowed error (`|| true`, `2>/dev/null`, or a broken shebang that exec-fails to
-   rc 127) is **forged**: the known-bad produced the expected output by never executing. Spot
-   the forge by checking each fake actually runs (e.g. run it once directly and confirm a
-   real rc / real output), not just that the block "looks green."
+3. **Prove the known-bad executed — don't infer it from output.** Requiring the two outputs
+   to *differ* is not enough: #81's cases diverged (`62 → (empty)`) yet were forged — the
+   known-bad's empty output came from an exec-failure (broken shebang → rc 127) that
+   `|| true`/`2>/dev/null` swallowed, coinciding with its *expected* value while never
+   running. So assert the known-bad actually **ran**: run the fake directly and confirm a
+   real return code (rc 0, not 127), not just that its output looks right. A case that reaches
+   its expected result by never executing is **forged**, however the two outputs compare.
 
-**FAIL the gate** if any documented check cannot be re-run, does not flip, or flips only by
-coincidence. This is the mechanical enforcement of the Verification-led rule — prose forbade
+**FAIL the gate** if any documented check cannot be re-run, does not flip, or can't prove the
+known-bad actually executed. This is the mechanical enforcement of the Verification-led rule — prose forbade
 shipping unrun checks twice (retroactives `verify-check-commands`, `validate-reexec-operator-checks`)
 and it still recurred, so the gate now re-executes rather than trusting the page.
 

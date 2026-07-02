@@ -99,12 +99,12 @@ integrated (idempotent, compatible, side-effect-free) is not grounded until a pr
 it — assert it only after the experiment, never from docs or reasoning alone. A **check
 command is itself such a claim** — it asserts it can distinguish pass from fail — and is
 ungrounded until run against a **known-good and a known-bad** case and seen to flip **for the
-right reason**. A flip whose two cases can *coincide* in output under a swallowed error
-(`|| true`, `2>/dev/null`, or a broken shebang that exec-fails to rc 127) is **forged**, not
-grounded — the known-bad produced the expected output by never running. Prove execution:
-assert the return code, or that the two cases differ, not merely that output changed. Never
-trust or ship a GO-checklist or operator-card check that was only reasoned about, never
-executed. Prefer
+right reason**. Output alone can't prove that: a known-bad can reach its *expected* result by
+never executing — a broken shebang (→ rc 127) or swallowed error (`|| true`, `2>/dev/null`)
+coinciding with the expected value. That flip is **forged** whether the two cases match or
+differ; prove execution by asserting the known-bad's return code — don't infer it ran from
+its output. Never trust or ship a GO-checklist or operator-card check that was only reasoned
+about, never executed. Prefer
 test-driven, vertical tracer-bullet slices (one test → one implementation → repeat) over
 writing all tests up front. See
 [`.claude/skills/tdd-gate/SKILL.md`](.claude/skills/tdd-gate/SKILL.md) and
@@ -131,5 +131,5 @@ Fill these in per project. Keep it short.
   - Never cold-start `grill-with-docs` as a feature entry point — it may only be invoked from a `strategic-planning` escalation handoff; every feature idea enters via `strategic-planning` (brain dump) first. Cold-starting `grill-with-docs` is the misrouting that inflates canonical docs silently (retroactive: comprehension-at-the-boundary).
   - Canonical docs (`CONTEXT.md`, ADRs) stay English — **never persist Chinese translations into canonical files**, which would create a second drifting source of truth (retroactive: comprehension-at-the-boundary).
   - Every PR body must include a Traditional Chinese `## 變更說明` section (what changed and why) — the author's comprehension checkpoint at the human gate. Authored by `/validate` Phase 5; carried by the author's PR review, not CI (retroactive: zh-summary-every-pr, ADR-0022).
-  - Never ship a GO-checklist / operator-card check command that was never executed — a check is a behavioral claim (it asserts it can tell pass from fail) and is ungrounded until dry-run against a **known-good AND known-bad** case. The #61 live Seam-3 probe verified the executor, yet its own runbook's checks were unrun: §5's `git log --reverse <branch>` walked from the root commit and returned "Initial commit", silently never verifying "plan is the branch's first commit." (retroactive: verify-check-commands)
-  - Never trust a runbook/operator-card grounding block's pasted `# → observed:` comment at the gate — **re-execute** it. `/validate`'s "Re-execute changed operator checks" step is the enforcement: any runbook/operator-card added or changed on the branch has its grounding commands re-run (known-good + known-bad), and a pasted `observed:` is unverified until reproduced. Prose ("dry-run every check") forbade this twice and still didn't bind — so the gate re-runs, it doesn't re-read. The #81 miss: a known-bad fake `gh` shipped as `#!/usr/bin/env bash; exit 0` (a broken shebang → rc 127); the loop's `|| true` swallowed the exec-failure to empty output, coincidentally identical to a real empty queue, so the `62 → (empty)` "flip" *looked* real while the known-bad never executed. Grounding must prove execution, not coinciding output (see Verification-led). (retroactive: validate-reexec-operator-checks)
+  - Never ship a GO-checklist / operator-card check that was never executed — a check is a claim (it asserts it tells pass from fail), ungrounded until dry-run against a **known-good AND known-bad** case. #61's live probe verified the executor but left its own runbook's checks unrun: §5's `git log --reverse <branch>` walked from the root commit ("Initial commit"), never verifying "plan is the branch's first commit." (retroactive: verify-check-commands)
+  - Never trust a grounding block's pasted `# → observed:` at the gate — **re-execute** it. `/validate` Phase 3.5 is the enforcement: any runbook/operator-card changed on the branch has its checks re-run (known-good + known-bad); a pasted `observed:` is unverified until reproduced. Prose forbade shipping unrun checks twice and didn't bind, so the gate re-runs rather than re-reads. #81's known-bad fake `gh` was a forged flip (see Verification-led): `62 → (empty)` looked real, but the empty came from an exec-failure (broken shebang → rc 127), not an empty queue. (retroactive: validate-reexec-operator-checks)
