@@ -54,14 +54,42 @@ matches the plan. Fix and re-run on failure.
 If the plan has no E2E section, do a smoke test of the changed behavior and note "no E2E
 section in plan — smoke test only."
 
+## Phase 3.5 — Re-execute changed operator checks
+
+Runs **regardless of whether a plan was found** — an operator runbook can ship without an
+E2E plan section. A runbook/operator-card grounding block is free-floating prose that
+`validate.sh` never touches; a pasted `# → observed:` comment is a *claim*, not evidence.
+**The gate re-runs it, it does not re-read it.**
+
+1. **Enumerate.** List every operator runbook / operator-card **added or changed on the
+   branch**:
+   `git diff --name-only main...HEAD -- '.agents/reports/*runbook*.md' '.agents/**/*operator*.md'`
+   (nothing changed → this phase is a no-op; say so).
+2. **Re-run each grounding/check block.** For every "Grounding evidence" / GO-checklist /
+   check-command block in those files, actually execute the known-good **and** known-bad
+   cases. Treat any pasted `# → observed:` as **unverified until reproduced**.
+3. **Prove the known-bad executed — don't infer it from output.** Requiring the two outputs
+   to *differ* is not enough: #81's cases diverged (`62 → (empty)`) yet were forged — the
+   known-bad's empty output came from an exec-failure (broken shebang → rc 127) that
+   `|| true`/`2>/dev/null` swallowed, coinciding with its *expected* value while never
+   running. So assert the known-bad actually **ran**: run the fake directly and confirm a
+   real return code (rc 0, not 127), not just that its output looks right. A case that reaches
+   its expected result by never executing is **forged**, however the two outputs compare.
+
+**FAIL the gate** if any documented check cannot be re-run, does not flip, or can't prove the
+known-bad actually executed. This is the mechanical enforcement of the Verification-led rule — prose forbade
+shipping unrun checks twice (retroactives `verify-check-commands`, `validate-reexec-operator-checks`)
+and it still recurred, so the gate now re-executes rather than trusting the page.
+
 ## Phase 4 — Report
 
 Write the final result:
 
 ```
-Gate:  PASS / FAIL
-E2E:   PASS / FAIL / SKIPPED (no plan)
-Overall: PASS / FAIL
+Gate:      PASS / FAIL
+E2E:       PASS / FAIL / SKIPPED (no plan)
+Op-checks: PASS / FAIL / N/A (no runbook/operator-card changed)
+Overall:   PASS / FAIL
 ```
 
 - **PASS**: archive the plan with
@@ -74,9 +102,10 @@ Overall: PASS / FAIL
   ```
   git commit -m "docs(plan): archive {slug} plan on green gate" -m "$(cat <<'EOF'
   Validate session result:
-  Gate:    PASS  (bash .claude/validate.sh)
-  E2E:     PASS  /  SKIPPED (no plan E2E section)
-  Overall: PASS
+  Gate:      PASS  (bash .claude/validate.sh)
+  E2E:       PASS  /  SKIPPED (no plan E2E section)
+  Op-checks: PASS  /  N/A (no runbook/operator-card changed)
+  Overall:   PASS
   EOF
   )"
   ```
