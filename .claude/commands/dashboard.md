@@ -1,5 +1,5 @@
 ---
-description: Show project development dashboard — open GitHub issues/PRs, plans ready to implement, untracked designs, and active worktree PIV phases with validate verdicts
+description: Show project development dashboard — open GitHub issues/PRs, plans ready to implement, untracked designs, active worktree PIV phases with validate verdicts, and Night Shift loop state (phase + attempts)
 ---
 
 # Dashboard
@@ -33,6 +33,28 @@ For each worktree that is **not** the main repo root:
 - Extract branch name and absolute path
 - List `.agents/plans/*.plan.md` inside it to find the plan slug
 - List `.agents/reports/` to check for a `{slug}-report.md`
+
+**D. Night Shift loop state**
+
+The durable per-task loop state lives in `.night-shift/*.state`. Because `.night-shift/` is
+gitignored and the executor runs in its **own clone** (ADR-0024), the operator's main checkout
+usually has no state files — point `NIGHT_SHIFT_STATE_DIR` at the executor's clone to observe live
+state. This section renders `(none)` when the directory is empty or unset. A single dir is shown —
+if multiple Night Shift clones ever run concurrently (#63), only the pointed-at clone is visible here.
+
+```bash
+# loop_state.sh resolves the dir from NIGHT_SHIFT_STATE_DIR, so export it once and the glob
+# and the accessors agree.
+export NIGHT_SHIFT_STATE_DIR="${NIGHT_SHIFT_STATE_DIR:-.night-shift}"
+for f in "$NIGHT_SHIFT_STATE_DIR"/*.state; do
+  [ -e "$f" ] || continue                       # no files -> section renders (none)
+  n="$(basename "$f" .state)"
+  printf '%s\t%s\t%s\t%s\n' "$n" \
+    "$(bash scripts/loop_state.sh get-phase "$n")" \
+    "$(bash scripts/loop_state.sh get-attempts "$n")" \
+    "$(bash scripts/loop_state.sh get-escalated "$n")"
+done
+```
 
 ---
 
@@ -99,7 +121,31 @@ The archive commit body carries an `Overall:` line. Map it to the Validate colum
 
 ---
 
-## Phase 4 — Render dashboard
+## Phase 4 — Classify Night Shift loop state
+
+Using the Phase 1D fields (task id, phase, attempts, escalated) and the Phase 1A open-issue /
+open-PR lists, classify each task. Evaluate top-down; use the first matching row.
+
+| Condition (top-down) | Bucket / Status |
+|----------------------|-----------------|
+| Issue `N` **not** in the open-issues list | **Resolved** — omit from the table (state is stale after merge/close); count in the `(M resolved)` summary tally |
+| `escalated = 1` | **🔴 escalated** — terminal; needs human triage |
+| An open PR exists whose `headRefName` matches `feat/{N}-*` | **✅ PR open #{pr}** — terminal; awaiting merge |
+| otherwise (issue open, not escalated, no matching PR) | **⏳ in-flight** — show live phase + attempts |
+
+**Accepted limitation — ⏳ can't distinguish live from stalled.** A task that hit the retry cap
+without escalating, or whose loop crashed, stays issue-open / `escalated=0` / no-PR / `.state`-present
+— indistinguishable from a live task; it renders ⏳ in-flight indefinitely (the store carries no
+cap-hit / stall signal). A staleness cue (attempts ≥ MAX, or `.state` mtime) is a later
+enhancement.
+
+**Accepted limitation — `gh` list limits.** `gh issue/pr list` limits (50/20) could omit a live
+task on a very large board, misclassifying it as resolved. Inherits the existing dashboard's limits
+and noted here; not fixed in this observability slice.
+
+---
+
+## Phase 5 — Render dashboard
 
 Print this structure. Use `(none)` for empty sections.
 
@@ -132,7 +178,17 @@ Files in .agents/prds/ or .agents/plans/ (main, not completed/) with no linked G
 |--------------------------------|---------------------|-------|-----------|----------|
 | ../ai-layer-template-feat42-.. | feat/42-some-feat   | #42   | IMPLEMENT | —        |
 | ../ai-layer-template-feat26-.. | feat/26-spike       | #26   | VALIDATE  | ✅ PASS  |
+
+## 🌙 Night Shift — Loop State (N)
+Durable per-task loop state (.night-shift/*.state; set NIGHT_SHIFT_STATE_DIR to the executor's
+clone to observe live state). In-flight tasks show their live phase; terminal tasks are marked.
+Phase shown UPPER-CASED. (none) when empty.
+| Task | Phase     | Attempts | Status                |
+|------|-----------|----------|-----------------------|
+| #42  | IMPLEMENT | 1        | ⏳ in-flight          |
+| #57  | VALIDATE  | 0        | ✅ PR open #83        |
+| #99  | VALIDATE  | 3        | 🔴 escalated — triage |
 ```
 
 End with a one-line summary: total open issues, open PRs, plans ready to implement, untracked
-designs, and active worktrees.
+designs, active worktrees, and N night-shift tasks in flight (M resolved).
