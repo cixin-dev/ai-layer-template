@@ -86,6 +86,7 @@ _stopped() { [ -f "$STOP_FILE" ]; }
 
 drain() {
   _require_serial || return $?
+  local last=""
   while :; do
     if _stopped; then
       echo "kill switch: $STOP_FILE present — stopping"
@@ -93,12 +94,24 @@ drain() {
     fi
     n="$(select_issue)"
     [ -n "$n" ] || return 0
+    # No-progress guard: selection is driven by the executor's side effects
+    # (the in-progress claim label, or PR_OPEN/ESCALATED). If we re-select the
+    # SAME Issue we just dispatched, that state did not advance — the executor's
+    # best-effort `_claim` (gh … || true) failed to stick, or it died pre-claim.
+    # Ending the pass hands control back to loop(), whose idle sleep is the
+    # backoff, degrading a hot-spin into a bounded poll-interval retry rather
+    # than re-running the same Issue's full PIV cycle with zero wait.
+    if [ "$n" = "$last" ]; then
+      echo "no progress on #$n (still selectable after dispatch) — ending drain pass to back off" >&2
+      return 0
+    fi
     echo "dispatch: #$n"
     rc=0
     "$RUN" "$n" || rc=$?
     if [ "$rc" -ne 0 ]; then
       echo "executor rc=$rc for #$n — task left claimed; continuing" >&2
     fi
+    last="$n"
   done
 }
 
@@ -134,7 +147,8 @@ main() {
     select) select_issue ;;
     drain)  drain ;;
     loop)   loop ;;
-    ''|-h|--help) loop ;;
+    '')     loop ;;
+    -h|--help) usage ;;
     *)
       usage
       exit 2
