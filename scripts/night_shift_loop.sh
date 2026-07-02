@@ -57,9 +57,16 @@ _terminal_for() {  # N → exit 0 if already terminal (PR open or escalated)
   "$RUN" snapshot "$1" 2>/dev/null | grep -qE '^(PR_OPEN|ESCALATED)=1$'
 }
 
+# select_issue [exclude_csv] — lowest grabbable Issue not present in the optional
+# exclude set (comma-list of numbers dispatched this pass).
 select_issue() {
+  local exclude="${1:-}"
   while IFS=$'\t' read -r n labels; do
     [ -z "$n" ] && continue
+    # skip Issues already dispatched this pass (caller's exclude set)
+    case ",$exclude," in
+      *",$n,"*) continue ;;
+    esac
     # skip claimed
     case ",$labels," in
       *",$CLAIM_LABEL,"*) continue ;;
@@ -86,23 +93,24 @@ _stopped() { [ -f "$STOP_FILE" ]; }
 
 drain() {
   _require_serial || return $?
-  local last=""
+  local dispatched=""
   while :; do
     if _stopped; then
       echo "kill switch: $STOP_FILE present — stopping"
       return 0
     fi
-    n="$(select_issue)"
-    [ -n "$n" ] || return 0
-    # No-progress guard: selection is driven by the executor's side effects
-    # (the in-progress claim label, or PR_OPEN/ESCALATED). If we re-select the
-    # SAME Issue we just dispatched, that state did not advance — the executor's
-    # best-effort `_claim` (gh … || true) failed to stick, or it died pre-claim.
-    # Ending the pass hands control back to loop(), whose idle sleep is the
-    # backoff, degrading a hot-spin into a bounded poll-interval retry rather
-    # than re-running the same Issue's full PIV cycle with zero wait.
-    if [ "$n" = "$last" ]; then
-      echo "no progress on #$n (still selectable after dispatch) — ending drain pass to back off" >&2
+    n="$(select_issue "$dispatched")"
+    if [ -z "$n" ]; then
+      # No selectable Issue remains that we haven't already dispatched this pass —
+      # forward progress is exhausted. If one is STILL selectable but was excluded,
+      # its claim never stuck (best-effort `_claim` swallowed by `gh … || true`, or
+      # the executor died pre-claim); log it as a diagnostic, but do NOT re-dispatch:
+      # each Issue is dispatched at most once per pass (preserves the #81 H1 hot-spin
+      # bound), and loop()'s idle sleep is the cross-pass backoff that gives the stuck
+      # Issue one more try next poll. Skipping it here is what lets higher-numbered
+      # ready Issues still drain (#84).
+      stuck="$(select_issue)"
+      [ -n "$stuck" ] && echo "no progress on #$stuck (still selectable after dispatch) — ending drain pass to back off" >&2
       return 0
     fi
     echo "dispatch: #$n"
@@ -111,7 +119,7 @@ drain() {
     if [ "$rc" -ne 0 ]; then
       echo "executor rc=$rc for #$n — task left claimed; continuing" >&2
     fi
-    last="$n"
+    dispatched="${dispatched:+$dispatched,}$n"
   done
 }
 

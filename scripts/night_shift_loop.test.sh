@@ -239,6 +239,31 @@ assert_contains "$OUT_D3" "no progress on #62" "(D3) no-progress guard message p
 dispatch_count_d3="$(grep -c '^run 62$' "$TL_D3" || echo 0)"
 assert_eq "$dispatch_count_d3" "1" "(D3) issue dispatched exactly once, not re-dispatched"
 
+# (D4) stuck low Issue must NOT starve a higher ready Issue (#84 head-of-line fix).
+# Issue 62 fails-to-claim (stays ready-and-unclaimed → re-selectable forever); 63 is
+# ready and succeeds. Skip-and-continue must drain BOTH in one pass: 62 exactly once
+# (excluded after its first dispatch → H1 hot-spin bound preserved) and 63 reached —
+# a naive drain that ends the pass on 62's no-progress drops 63 (run63 == 0). Hard
+# `timeout` turns a head-of-line-blocking regression (loop or drop) into a red
+# assertion instead of a hung suite.
+TL_D4="$WORK/tl-d4"; : > "$TL_D4"
+ST_D4="$WORK/state-d4"; mkdir -p "$ST_D4"
+RS_D4="$WORK/run-d4"; mkdir -p "$RS_D4"
+RC=0
+OUT_D4="$(timeout 20 env NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+           NIGHT_SHIFT_SLEEP="$BIN/fakesleep" \
+           RUN_STATE="$RS_D4" NIGHT_SHIFT_STATE_DIR="$ST_D4" TIMELINE="$TL_D4" \
+           FAKE_GH_TSV="$(printf '62\tready-for-agent\n63\tready-for-agent')" \
+           FAKE_RUN_FAIL_NOCLAIM_N="62" \
+           bash "$LOOP" drain 2>&1)" || RC=$?
+assert_eq "$RC" "0" "(D4) stuck-low + ready-high → drain exits 0, no hot-spin (timeout=fail)"
+assert_contains "$OUT_D4" "dispatch: #62" "(D4) stuck low issue 62 dispatched"
+assert_contains "$OUT_D4" "dispatch: #63" "(D4) higher ready issue 63 reached (head-of-line fix)"
+run62_d4="$(grep -c '^run 62$' "$TL_D4" || echo 0)"
+assert_eq "$run62_d4" "1" "(D4) stuck issue 62 dispatched exactly once (H1 bound preserved)"
+run63_d4="$(grep -c '^run 63$' "$TL_D4" || echo 0)"
+assert_eq "$run63_d4" "1" "(D4) higher issue 63 dispatched once (would be 0 pre-fix — starved)"
+
 # =============================================================================
 # Slice L — loop (persistent poll + kill switch)
 # =============================================================================
