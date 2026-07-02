@@ -50,7 +50,8 @@ cat > "$PROBEDIR/gh-good" << 'EOF'
 case "$1 $2" in "issue list") printf '62\tready-for-agent\n' ;; esac; exit 0
 EOF
 cat > "$PROBEDIR/gh-empty" << 'EOF'
-#!/usr/bin/env bash; exit 0
+#!/usr/bin/env bash
+case "$1 $2" in "issue list") : ;; esac; exit 0
 EOF
 cat > "$PROBEDIR/run" << 'EOF'
 #!/usr/bin/env bash

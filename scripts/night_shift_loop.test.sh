@@ -91,6 +91,12 @@ case "$cmd" in
   *)
     # bare number or "run N"
     n="$cmd"
+    if [ "${FAKE_RUN_FAIL_NOCLAIM_N:-}" = "$n" ]; then
+      # failure WITHOUT claiming: models the claim write not sticking (gh … || true
+      # swallowed the error) or the executor dying pre-claim. The Issue stays
+      # ready-and-unclaimed, so select_issue keeps returning it (H1 hot-spin bait).
+      exit 4
+    fi
     if [ "${FAKE_RUN_FAIL_N:-}" = "$n" ]; then
       # failure: write claimed marker (executor kept in-progress); no pr-open
       [ -n "${RUN_STATE:-}" ] && : > "${RUN_STATE}/claimed-$n"
@@ -213,6 +219,26 @@ dispatch_count="$(grep -c '^run 62$' "$TL_D2" || echo 0)"
 assert_eq "$dispatch_count" "1" "(D2) issue dispatched exactly once"
 assert_not_contains "$(cat "$TL_D2")" "sleep" "(D2) sleep never invoked in drain"
 
+# (D3) executor fails WITHOUT claiming (claim didn't stick) → drain must NOT hot-spin.
+# Issue 62 stays ready-and-unclaimed forever, so a naive drain would re-select and
+# re-dispatch it unbounded (the H1 finding). The no-progress guard must end the pass
+# after one dispatch. Hard `timeout` turns a regression (infinite loop) into a red
+# assertion instead of a hung suite.
+TL_D3="$WORK/tl-d3"; : > "$TL_D3"
+ST_D3="$WORK/state-d3"; mkdir -p "$ST_D3"
+RS_D3="$WORK/run-d3"; mkdir -p "$RS_D3"
+RC=0
+OUT_D3="$(timeout 20 env NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+           NIGHT_SHIFT_SLEEP="$BIN/fakesleep" \
+           RUN_STATE="$RS_D3" NIGHT_SHIFT_STATE_DIR="$ST_D3" TIMELINE="$TL_D3" \
+           FAKE_GH_TSV="$(printf '62\tready-for-agent')" \
+           FAKE_RUN_FAIL_NOCLAIM_N="62" \
+           bash "$LOOP" drain 2>&1)" || RC=$?
+assert_eq "$RC" "0" "(D3) claim-not-stuck failure → drain exits 0, no hot-spin (timeout=fail)"
+assert_contains "$OUT_D3" "no progress on #62" "(D3) no-progress guard message printed"
+dispatch_count_d3="$(grep -c '^run 62$' "$TL_D3" || echo 0)"
+assert_eq "$dispatch_count_d3" "1" "(D3) issue dispatched exactly once, not re-dispatched"
+
 # =============================================================================
 # Slice L — loop (persistent poll + kill switch)
 # =============================================================================
@@ -299,6 +325,32 @@ OUT_L5="$(NIGHT_SHIFT_CONCURRENCY=2 bash "$LOOP" loop 2>&1)" || RC=$?
 [ "$RC" -ne 0 ] && concur_ok=yes || concur_ok=no
 assert_eq "$concur_ok" "yes" "(L5) concurrency != 1 exits non-zero"
 assert_contains "$OUT_L5" "serial only" "(L5) serial-only error message"
+
+# =============================================================================
+# Slice E — entry dispatch (usage vs the credit-spending loop)
+# =============================================================================
+
+# (E1) -h/--help print usage and must NOT enter loop(). A regression maps them
+# back to loop(); with no MAX_POLLS that loops forever, so `timeout` guards it.
+for flag in -h --help; do
+  RC=0
+  OUT_E="$(timeout 20 bash "$LOOP" "$flag" 2>&1)" || RC=$?
+  assert_eq "$RC" "0" "(E1) $flag exits 0"
+  assert_contains "$OUT_E" "usage:" "(E1) $flag prints usage"
+  assert_not_contains "$OUT_E" "idle: sleeping" "(E1) $flag does not enter loop"
+done
+
+# (E2) bare invocation is the documented primary entry → still runs loop().
+ST_E2="$WORK/state-e2"; mkdir -p "$ST_E2"
+RS_E2="$WORK/run-e2"; mkdir -p "$RS_E2"
+RC=0
+OUT_E2="$(NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+           NIGHT_SHIFT_SLEEP="$BIN/fakesleep" \
+           RUN_STATE="$RS_E2" NIGHT_SHIFT_STATE_DIR="$ST_E2" \
+           FAKE_GH_TSV="" NIGHT_SHIFT_MAX_POLLS=1 \
+           bash "$LOOP" 2>&1)" || RC=$?
+assert_eq "$RC" "0" "(E2) bare invocation exits 0"
+assert_contains "$OUT_E2" "reached MAX_POLLS=1" "(E2) bare invocation still enters loop"
 
 # =============================================================================
 # Summary
