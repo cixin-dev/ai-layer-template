@@ -2,7 +2,8 @@
 
 **Status:** Accepted (2026-06-30); **depends on** ADR-0023 (triggers schedule, don't judge) and
 the Night Shift PRD (`.agents/prds/piv-ralph-loop.prd.md`, issue #61). Leaves the PIV artifact
-lifecycle (ADR-0013 plan archived by validate, ADR-0014 plan seeded as first commit) **unchanged**.
+lifecycle (ADR-0013 plan archived by validate, ADR-0014 plan seeded as first commit) **unchanged**;
+the recurring event+poll scheduler it deferred (§3) is now recorded in ADR-0026.
 
 ## Context
 

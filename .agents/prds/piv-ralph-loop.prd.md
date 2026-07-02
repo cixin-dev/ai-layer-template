@@ -155,7 +155,8 @@ is ready, or a task is stuck.
   triggers the next), with a ~5-minute poll as a safety net that (a) discovers newly-`ready`
   Issues and (b) recovers any dropped completion event. The runtime substrate (cron /
   `/loop`+`/routines` / a Workflow engine) is deliberately NOT fixed here — it is a
-  `/plan`-phase decision. This PRD fixes only behavior.
+  `/plan`-phase decision **(now decided — see ADR-0026: shell drain+poll loop)**. This PRD fixes
+  only behavior.
 
 - **Failure = bounded retry ladder, then escalate.** On a red gate: attempt 1 → route to
   `/retroactive` or re-run `/implement`; attempt 2 → re-run `/plan` (suspect the plan
@@ -246,7 +247,7 @@ is ready, or a task is stuck.
 - A long-lived single `/loop` session that chains phases in one context. Session isolation
   per phase is mandatory.
 - Fixing the runtime substrate (cron vs `/loop`+`/routines` vs Workflow). A `/plan`-phase
-  decision.
+  decision **— now recorded in ADR-0026**.
 - v1 concurrency > 1. Serial first; N is a later graduation.
 - Dependency-aware scheduling. v1 assumes independently-grabbable, `ready`-labelled Issues.
 - Editing CONTEXT.md / ADRs. That is the gate-0 `grill-with-docs` session's job, in its own
@@ -269,3 +270,6 @@ is ready, or a task is stuck.
   label; whether that is a new label or the existing `ready-for-agent` *triage* label is #63's
   open decision. Deliberately left unresolved here — the claim gate (`in-progress`) composes
   with whichever name wins.
+- **Runtime substrate — decided.** The `/plan`-phase substrate question left open above is
+  answered in ADR-0026: a shell drain+poll outer loop (`night_shift_loop.sh`) invoking the
+  ADR-0024 executor per Issue. No dangling "deferred" pointer remains.
