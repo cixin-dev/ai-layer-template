@@ -2,7 +2,7 @@
 # Pure next-action decider for the Night Shift loop (ADR-0023: schedule, don't judge).
 #
 # Input: snapshot env vars (all booleans "1"/"0"; GATE is "unrun"/"green"/"red"; ATTEMPTS is int).
-#   ISSUE_READY   — Issue carries the `ready` label
+#   ISSUE_READY   — Issue carries the `ready-for-agent` label
 #   PLAN_PRESENT  — .agents/plans/{name}.plan.md exists
 #   REPORT_PRESENT— .agents/reports/{name}-report.md exists
 #   GATE          — validate gate verdict

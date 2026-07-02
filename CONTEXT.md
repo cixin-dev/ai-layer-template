@@ -250,17 +250,17 @@ event — Source B reuses both transports); "sink" / "channel" (the pre-canonica
 
 The posture above **Unattended Autonomy**: where Unattended Autonomy removed *input* friction (no
 per-tool-use approval inside the sandbox), the Night Shift removes *orchestration* friction (no
-per-phase human initiation). It drives each `ready`-labelled **Issue** through the whole **PIV
-Loop** — Plan → Implement → Validate — with no human between phases, then opens a PR and stops, so a
-queue of `ready` work drains itself overnight. Its load-bearing property is that **each phase runs
-in its own fresh, isolated session**: the loop automates the human's "open a new session and type
-the next command," and never chains phases in one long context — that would forfeit session
-isolation and rot the context (see **Ralph Loop**). The human keeps both bookends — the **Day
-Shift** loads the queue, the **boundary gate** reviews the PR. The loop advances event-driven on
-the happy path; a **scheduling poll** — a periodic machine sweep (*not* a human's
-dashboard-checking) — is the backstop that picks up newly-`ready` Issues and recovers dropped
-completion events (its runtime substrate stays a `/plan` decision; the loop's triggers *schedule*
-phases but never *judge* completion — ADR-0023).
+per-phase human initiation). It drives each `ready-for-agent`-labelled **Issue** (the trigger
+label — #63/ADR-0025) through the whole **PIV Loop** — Plan → Implement → Validate — with no human
+between phases, then opens a PR and stops, so a queue of `ready-for-agent` work drains itself
+overnight. Its load-bearing property is that **each phase runs in its own fresh, isolated session**:
+the loop automates the human's "open a new session and type the next command," and never chains
+phases in one long context — that would forfeit session isolation and rot the context (see **Ralph
+Loop**). The human keeps both bookends — the **Day Shift** loads the queue, the **boundary gate**
+reviews the PR. The loop advances event-driven on the happy path; a **scheduling poll** — a periodic
+machine sweep (*not* a human's dashboard-checking) — is the backstop that picks up newly
+`ready-for-agent` Issues and recovers dropped completion events (its runtime substrate stays a
+`/plan` decision; the loop's triggers *schedule* phases but never *judge* completion — ADR-0023).
 _Avoid_: "PIV Ralph Loop" (the PRD title — a descriptive label, not the canonical name);
 conflating with **Unattended Autonomy** (the layer below — that gates *inputs*; the Night Shift
 removes *orchestration*); a single long `/loop` session chaining phases (a naive **Ralph Loop**, no
@@ -268,8 +268,8 @@ isolation).
 
 **Day Shift**:
 The human-attended planning input that loads the Night Shift's queue: write an **Issue** and add the
-`ready` label. The front bookend only; the back bookend (reviewing the PR) is the **boundary gate**,
-not the Day Shift.
+`ready-for-agent` label (the trigger label — #63/ADR-0025). The front bookend only; the back
+bookend (reviewing the PR) is the **boundary gate**, not the Day Shift.
 _Avoid_: stretching it to cover PR review (that is the **boundary gate**); reading it as a clock —
 it names the human's queue-loading work, not a time of day.
 

@@ -26,3 +26,4 @@ jobs:
           bash scripts/loop_state.test.sh
           bash scripts/night_shift_run.test.sh
           bash scripts/night_shift_retry.test.sh
+          bash scripts/night_shift_loop.test.sh

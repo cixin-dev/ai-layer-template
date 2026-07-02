@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # night_shift_run.sh — the Night Shift thin executor.
 #
-# Drives one `ready` Issue through Plan → Implement → Validate with no human
+# Drives one `ready-for-agent` Issue through Plan → Implement → Validate with no human
 # between phases. It carries NO loop logic: every "what next" comes from the pure
 # decider (scripts/night_shift_decide.sh, ADR-0023). This script only knows HOW
 # to perform each action — never WHETHER. Each phase runs in a fresh, isolated
@@ -23,7 +23,7 @@
 #   NIGHT_SHIFT_GH      (default: gh)       Issue labels / PR state / claim
 #   NIGHT_SHIFT_ROOT    (default: repo root) the clone's main checkout
 #   NIGHT_SHIFT_STATE_DIR (default: $ROOT/.night-shift)  loop_state store
-#   NIGHT_SHIFT_TRIGGER_LABEL (default: ready-for-agent) pickup trigger (#63 renames)
+#   NIGHT_SHIFT_TRIGGER_LABEL (default: ready-for-agent) the trigger label; #63 decided it stays `ready-for-agent` — ADR-0025
 #   NIGHT_SHIFT_CLAIM_LABEL   (default: in-progress)     claim label
 #   NIGHT_SHIFT_MAX_ITERS     (default: 6)               runaway safety cap
 set -euo pipefail
