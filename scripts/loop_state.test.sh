@@ -83,6 +83,39 @@ bash "$STORE" incr-attempts task-i >/dev/null
 phase_i=$(bash "$STORE" get-phase task-i)
 assert_eq "$phase_i" "implement" "(i) incr-attempts does not clobber phase"
 
+# (j) get-escalated unknown task → 0
+got=$(bash "$STORE" get-escalated task-j)
+assert_eq "$got" "0" "(j) get-escalated unknown task → 0"
+
+# (k) set-escalated → get-escalated returns 1
+bash "$STORE" set-escalated task-k
+got=$(bash "$STORE" get-escalated task-k)
+assert_eq "$got" "1" "(k) set-escalated → get-escalated returns 1"
+
+# (l) non-clobber: set-escalated preserves phase and attempts (both directions)
+bash "$STORE" incr-attempts task-l >/dev/null
+bash "$STORE" incr-attempts task-l >/dev/null
+bash "$STORE" set-phase task-l validate
+bash "$STORE" set-escalated task-l
+attempts_l=$(bash "$STORE" get-attempts task-l)
+phase_l=$(bash "$STORE" get-phase task-l)
+assert_eq "$attempts_l" "2" "(l) set-escalated does not clobber attempts"
+assert_eq "$phase_l" "validate" "(l) set-escalated does not clobber phase"
+# reverse: set-phase / incr-attempts do not clobber escalated
+esc_l=$(bash "$STORE" get-escalated task-l)
+assert_eq "$esc_l" "1" "(l) set-phase/incr-attempts do not clobber escalated"
+
+# (m) restart-survival: escalated=1 survives a fresh invocation
+bash "$STORE" set-escalated task-m
+got=$(bash "$STORE" get-escalated task-m)
+assert_eq "$got" "1" "(m) escalated=1 survives restart"
+
+# (n) corrupt / missing value → get-escalated → 0
+mkdir -p "$NIGHT_SHIFT_STATE_DIR"
+printf 'phase=validate\nattempts=2\n' > "$NIGHT_SHIFT_STATE_DIR/task-n.state"
+got=$(bash "$STORE" get-escalated task-n)
+assert_eq "$got" "0" "(n) no escalated key → default 0"
+
 # --- summary -------------------------------------------------------------------
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."

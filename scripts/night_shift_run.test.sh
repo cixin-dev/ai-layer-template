@@ -108,17 +108,29 @@ if [ "${SIM_MODE:-0}" = "1" ]; then
       mkdir -p "$SIM_ROOT/.agents/reports"
       : > "$SIM_ROOT/.agents/reports/$SIM_SLUG-report.md" ;;
     *"/validate "*)
-      mkdir -p "$SIM_ROOT/.agents/plans/completed"
-      mv "$SIM_ROOT/.agents/plans/$SIM_SLUG.plan.md" \
-         "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md" 2>/dev/null \
-         || : > "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md"
-      : > "$SIM_STATE/pr-open" ;;
+      # SIM_FAIL_VALIDATE=1 leaves validate as a no-op (never greens) to simulate red gate.
+      if [ "${SIM_FAIL_VALIDATE:-0}" != "1" ]; then
+        mkdir -p "$SIM_ROOT/.agents/plans/completed"
+        mv "$SIM_ROOT/.agents/plans/$SIM_SLUG.plan.md" \
+           "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md" 2>/dev/null \
+           || : > "$SIM_ROOT/.agents/plans/completed/$SIM_SLUG.plan.md"
+        : > "$SIM_STATE/pr-open"
+      fi ;;
   esac
 fi
 exit 0
 EOF
 chmod +x "$BIN/claude"
 export NIGHT_SHIFT_CLAUDE="$BIN/claude"
+
+# --- fake notify -------------------------------------------------------------
+# Logs "notify level title message" to NOTIFY_LOG when set.
+cat > "$BIN/notify" << 'EOF'
+#!/usr/bin/env bash
+[ -n "${NOTIFY_LOG:-}" ] && printf 'notify %s\n' "$*" >> "$NOTIFY_LOG"
+exit 0
+EOF
+chmod +x "$BIN/notify"
 
 # =============================================================================
 # Slice A — resolve-slug
@@ -154,7 +166,7 @@ assert_eq "$(field "$snap" PLAN_PRESENT)"   "0"     "(A4) no plan → PLAN_PRESE
 assert_eq "$(field "$snap" REPORT_PRESENT)" "0"     "(A4) no report → REPORT_PRESENT=0"
 assert_eq "$(field "$snap" GATE)"           "unrun" "(A4) no completed → GATE=unrun"
 assert_eq "$(field "$snap" PR_OPEN)"        "0"     "(A4) no PR → PR_OPEN=0"
-assert_eq "$(field "$snap" ESCALATED)"      "0"     "(A4) ESCALATED hard-wired 0"
+assert_eq "$(field "$snap" ESCALATED)"      "0"     "(A4) no escalation marker → ESCALATED=0"
 
 # (A5) post-plan draft: plan present, no report.
 R="$(mktemp -d "$WORK/postplan.XXXXXX")"
@@ -202,6 +214,57 @@ mkdir -p "$WT/.agents/reports"
 : > "$WT/.agents/reports/the-feature-report.md"
 snap="$(NIGHT_SHIFT_ROOT="$R" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
 assert_eq "$(field "$snap" REPORT_PRESENT)" "1"      "(A9) report read from worktree, not ROOT"
+
+# (A-red) phase=validate + report present + no completed/ + no escalation → GATE=red.
+R="$(mkrepo)"; git -C "$R" branch feat/61-red-feature
+WT_RED="$WORK/wt-red"; git -C "$R" worktree add -q "$WT_RED" feat/61-red-feature
+mkdir -p "$WT_RED/.agents/plans" "$WT_RED/.agents/reports"
+printf '| Issue | #61 |\n' > "$WT_RED/.agents/plans/red-feature.plan.md"
+: > "$WT_RED/.agents/reports/red-feature-report.md"
+ST_RED="$WORK/state-red"
+NIGHT_SHIFT_STATE_DIR="$ST_RED" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+snap="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST_RED" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)"      "red" "(A-red) phase=validate + report + no completed → GATE=red"
+assert_eq "$(field "$snap" ESCALATED)" "0"   "(A-red) no escalation marker → ESCALATED=0"
+
+# (A-green-prec) completed/ present + phase=validate → GATE=green (green takes precedence).
+R2="$(mkrepo)"; git -C "$R2" branch feat/61-red-feature
+WT_GP="$WORK/wt-gp"; git -C "$R2" worktree add -q "$WT_GP" feat/61-red-feature
+mkdir -p "$WT_GP/.agents/plans/completed" "$WT_GP/.agents/reports"
+: > "$WT_GP/.agents/plans/completed/red-feature.plan.md"
+: > "$WT_GP/.agents/reports/red-feature-report.md"
+ST_GP="$WORK/state-gp"
+NIGHT_SHIFT_STATE_DIR="$ST_GP" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+snap="$(NIGHT_SHIFT_ROOT="$R2" NIGHT_SHIFT_STATE_DIR="$ST_GP" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)" "green" "(A-green-prec) completed/ present overrides phase=validate → GATE=green"
+
+# (A-esc) escalated + phase=validate + report → GATE not red (unrun); ESCALATED=1.
+R3="$(mkrepo)"; git -C "$R3" branch feat/61-red-feature
+WT_ESC="$WORK/wt-esc"; git -C "$R3" worktree add -q "$WT_ESC" feat/61-red-feature
+mkdir -p "$WT_ESC/.agents/plans" "$WT_ESC/.agents/reports"
+printf '| Issue | #61 |\n' > "$WT_ESC/.agents/plans/red-feature.plan.md"
+: > "$WT_ESC/.agents/reports/red-feature-report.md"
+ST_ESC="$WORK/state-esc"
+NIGHT_SHIFT_STATE_DIR="$ST_ESC" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+NIGHT_SHIFT_STATE_DIR="$ST_ESC" bash "$SCRIPT_DIR/loop_state.sh" set-escalated 61
+snap="$(NIGHT_SHIFT_ROOT="$R3" NIGHT_SHIFT_STATE_DIR="$ST_ESC" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" GATE)"      "unrun" "(A-esc) escalated suppresses red → GATE=unrun"
+assert_eq "$(field "$snap" ESCALATED)" "1"     "(A-esc) set-escalated → ESCALATED=1 in snapshot"
+
+# (A-attempts) incr-attempts × 2 → snapshot emits ATTEMPTS=2.
+R4="$(mkrepo)"; git -C "$R4" branch feat/61-the-feature
+ST_ATT="$WORK/state-att"
+NIGHT_SHIFT_STATE_DIR="$ST_ATT" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+NIGHT_SHIFT_STATE_DIR="$ST_ATT" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+snap="$(NIGHT_SHIFT_ROOT="$R4" NIGHT_SHIFT_STATE_DIR="$ST_ATT" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" ATTEMPTS)" "2" "(A-attempts) two incr-attempts → ATTEMPTS=2 in snapshot"
+
+# (A-noesc) fresh task → ESCALATED=0 and ATTEMPTS=0 in snapshot.
+R5="$(mkrepo)"; git -C "$R5" branch feat/61-the-feature
+ST_NOESC="$WORK/state-noesc"
+snap="$(NIGHT_SHIFT_ROOT="$R5" NIGHT_SHIFT_STATE_DIR="$ST_NOESC" FAKE_LABELS="ready-for-agent" bash "$RUN" snapshot 61)"
+assert_eq "$(field "$snap" ESCALATED)" "0" "(A-noesc) fresh task → ESCALATED=0"
+assert_eq "$(field "$snap" ATTEMPTS)"  "0" "(A-noesc) fresh task → ATTEMPTS=0"
 
 # =============================================================================
 # Slice B — dispatch (one decision → the correct command in the correct cwd)
@@ -258,6 +321,54 @@ NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$WORK/state-b4" CLAUDE_LOG="$CLOG" 
 log="$(cat "$CLOG")"
 assert_contains "$log" "args=/validate $WT/.agents/plans/completed/foo.plan.md" "(B4) open-pr re-invokes /validate on the archived plan"
 assert_contains "$log" "cwd=$WT" "(B4) open-pr runs in the feature worktree"
+
+# (B-reimpl) retry-reimplement → /implement <wt>/<plan> in cwd=worktree; phase=implement.
+R="$(mkrepo)"; git -C "$R" branch feat/61-foo
+WT_RI="$WORK/wt-b-reimpl"; git -C "$R" worktree add -q "$WT_RI" feat/61-foo
+mkdir -p "$WT_RI/.agents/plans"; : > "$WT_RI/.agents/plans/foo.plan.md"
+ST_RI="$WORK/state-b-reimpl"; CLOG_RI="$WORK/clog-b-reimpl"; : > "$CLOG_RI"
+NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST_RI" CLAUDE_LOG="$CLOG_RI" \
+  bash "$RUN" dispatch retry-reimplement 61
+log_ri="$(cat "$CLOG_RI")"
+assert_contains "$log_ri" "args=/implement $WT_RI/.agents/plans/foo.plan.md" "(B-reimpl) retry-reimplement passes the worktree plan path"
+assert_contains "$log_ri" "cwd=$WT_RI"                                        "(B-reimpl) retry-reimplement runs in the worktree"
+assert_eq "$(NIGHT_SHIFT_STATE_DIR="$ST_RI" bash "$SCRIPT_DIR/loop_state.sh" get-phase 61)" \
+          "implement" "(B-reimpl) retry-reimplement records phase=implement"
+
+# (B-replan) retry-replan → /plan 61 in cwd=worktree; phase=plan.
+R="$(mkrepo)"; git -C "$R" branch feat/61-foo
+WT_RP="$WORK/wt-b-replan"; git -C "$R" worktree add -q "$WT_RP" feat/61-foo
+ST_RP="$WORK/state-b-replan"; CLOG_RP="$WORK/clog-b-replan"; : > "$CLOG_RP"
+NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST_RP" CLAUDE_LOG="$CLOG_RP" \
+  bash "$RUN" dispatch retry-replan 61
+log_rp="$(cat "$CLOG_RP")"
+assert_contains "$log_rp" "args=/plan 61"  "(B-replan) retry-replan invokes /plan 61"
+assert_contains "$log_rp" "cwd=$WT_RP"    "(B-replan) retry-replan runs in the worktree"
+assert_eq "$(NIGHT_SHIFT_STATE_DIR="$ST_RP" bash "$SCRIPT_DIR/loop_state.sh" get-phase 61)" \
+          "plan" "(B-replan) retry-replan records phase=plan"
+
+# (B-escalate) escalate → notify(fail, phase+attempts), set-escalated; no claude, no pr.
+R="$(mkrepo)"; git -C "$R" branch feat/61-foo
+WT_ESC2="$WORK/wt-b-esc"; git -C "$R" worktree add -q "$WT_ESC2" feat/61-foo
+ST_ESC2="$WORK/state-b-esc"
+NIGHT_SHIFT_STATE_DIR="$ST_ESC2" bash "$SCRIPT_DIR/loop_state.sh" set-phase 61 validate
+NIGHT_SHIFT_STATE_DIR="$ST_ESC2" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+NIGHT_SHIFT_STATE_DIR="$ST_ESC2" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+NIGHT_SHIFT_STATE_DIR="$ST_ESC2" bash "$SCRIPT_DIR/loop_state.sh" incr-attempts 61 >/dev/null
+CLOG_ESC2="$WORK/clog-b-esc"; GLOG_ESC2="$WORK/glog-b-esc"; NLOG_ESC2="$WORK/nlog-b-esc"
+: > "$CLOG_ESC2"; : > "$GLOG_ESC2"; : > "$NLOG_ESC2"
+NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST_ESC2" \
+  CLAUDE_LOG="$CLOG_ESC2" GH_LOG="$GLOG_ESC2" \
+  NOTIFY_LOG="$NLOG_ESC2" NIGHT_SHIFT_NOTIFY="$BIN/notify" \
+  bash "$RUN" dispatch escalate 61
+nlog_esc2="$(cat "$NLOG_ESC2")"
+assert_contains "$nlog_esc2"  "fail"     "(B-escalate) notify called with level=fail"
+assert_contains "$nlog_esc2"  "validate" "(B-escalate) notify message contains phase"
+assert_contains "$nlog_esc2"  "3"        "(B-escalate) notify message contains attempt count"
+assert_eq "$(NIGHT_SHIFT_STATE_DIR="$ST_ESC2" bash "$SCRIPT_DIR/loop_state.sh" get-escalated 61)" \
+          "1" "(B-escalate) set-escalated marker written"
+assert_eq "$(cat "$CLOG_ESC2")" "" "(B-escalate) no claude invocation on escalate"
+assert_not_contains "$(cat "$GLOG_ESC2")" "pr create" "(B-escalate) no gh pr create on escalate"
 
 # =============================================================================
 # Slice C — drive loop + claim gate + selection
@@ -345,6 +456,46 @@ OUT="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$WORK/state-c5" \
         bash "$RUN" run 61 2>&1)" || RC=$?
 assert_eq "$RC" "3" "(C5) runaway hits MAX_ITERS → exit 3"
 assert_eq "$(printf '%s\n' "$(cat "$TL")" | grep -c 'claude .*args=/plan')" "3" "(C5) stopped after exactly MAX_ITERS iterations"
+
+# (C-fail) full failure-path drive: red gate → retry ladder → escalation → terminal no-op.
+# Validate never greens (SIM_FAIL_VALIDATE=1): plan+impl+val → red×1 (reimpl) →
+# val → red×2 (replan) → impl+val → red×3 (escalate) → noop. Second run is pure noop.
+R="$(mkrepo)"; git -C "$R" branch feat/61-foo
+ST_CF="$WORK/sim-c-fail"; mkdir -p "$ST_CF"
+STATE_CF="$WORK/state-c-fail"
+TL_CF="$WORK/tl-c-fail"; NLOG_CF="$WORK/nlog-c-fail"; : > "$TL_CF"; : > "$NLOG_CF"
+RC=0
+OUT_CF="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$STATE_CF" \
+            FAKE_LABELS="ready-for-agent" SIM_STATE="$ST_CF" TIMELINE="$TL_CF" \
+            SIM_MODE=1 SIM_FAIL_VALIDATE=1 SIM_N=61 SIM_SLUG=foo SIM_ROOT="$R" \
+            NOTIFY_LOG="$NLOG_CF" NIGHT_SHIFT_NOTIFY="$BIN/notify" \
+            NIGHT_SHIFT_MAX_ATTEMPTS=3 \
+            bash "$RUN" run 61 2>&1)" || RC=$?
+tl_cf="$(cat "$TL_CF")"
+nlog_cf="$(cat "$NLOG_CF")"
+assert_eq "$RC" "0" "(C-fail) failure drive → exit 0"
+assert_contains "$OUT_CF" "done: #61" "(C-fail) reaches terminal done"
+# exactly one escalation notify
+assert_eq "$(printf '%s\n' "$nlog_cf" | grep -c 'notify')" "1" "(C-fail) exactly one notify call"
+assert_contains "$nlog_cf" "fail"     "(C-fail) notify level=fail"
+assert_contains "$nlog_cf" "validate" "(C-fail) notify message contains phase"
+assert_contains "$nlog_cf" "3"        "(C-fail) notify message contains attempt count (3)"
+# escalated marker persists across the run
+assert_eq "$(NIGHT_SHIFT_STATE_DIR="$STATE_CF" bash "$SCRIPT_DIR/loop_state.sh" get-escalated 61)" \
+          "1" "(C-fail) escalated=1 persists after run"
+# retry order: retry-reimplement (/implement) fires before retry-replan (/plan)
+first_val_ln="$(awk '/args=\/validate /{print NR; exit}' "$TL_CF")"
+first_retry_cmd="$(awk -v n="$first_val_ln" 'NR>n && /args=\//{ print; exit }' "$TL_CF")"
+assert_contains "$first_retry_cmd" "/implement" "(C-fail) first retry after red gate is /implement (retry-reimplement)"
+replan_line="$(awk -v n="$first_val_ln" 'NR>n && /args=\/plan /{ print; exit }' "$TL_CF")"
+assert_contains "$replan_line" "/plan" "(C-fail) retry-replan (/plan) fires during ladder"
+# second run is a pure no-op: claim → noop (ESCALATED=1) → release; no new notify
+OUT_CF2="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$STATE_CF" \
+              FAKE_LABELS="ready-for-agent" SIM_STATE="$ST_CF" \
+              NOTIFY_LOG="$NLOG_CF" NIGHT_SHIFT_NOTIFY="$BIN/notify" \
+              bash "$RUN" run 61 2>&1)"
+assert_contains "$OUT_CF2" "done: #61" "(C-fail) second run → done (noop)"
+assert_eq "$(cat "$NLOG_CF" | grep -c 'notify')" "1" "(C-fail) no second notify on re-run"
 
 # --- summary -----------------------------------------------------------------
 if [ "$FAILURES" -eq 0 ]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# loop_state.sh — durable per-task loop state (phase + attempts).
-# State dir: ${NIGHT_SHIFT_STATE_DIR:-.night-shift}/<task>.state (key=value, 2 lines)
+# loop_state.sh — durable per-task loop state (phase + attempts + escalated).
+# State dir: ${NIGHT_SHIFT_STATE_DIR:-.night-shift}/<task>.state (key=value lines)
 set -euo pipefail
 
 STATE_DIR="${NIGHT_SHIFT_STATE_DIR:-.night-shift}"
@@ -25,7 +25,7 @@ cmd="${1:-}"
 task="${2:-}"
 
 if [ -z "$cmd" ] || [ -z "$task" ] && [ "$cmd" != "--help" ]; then
-  printf 'Usage: %s <get-phase|get-attempts|set-phase|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
+  printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
   exit 2
 fi
 
@@ -41,6 +41,10 @@ case "$cmd" in
       printf '0\n'
     fi
     ;;
+  get-escalated)
+    raw=$(_read_key "$(_file "$task")" escalated)
+    if [ "$raw" = "1" ]; then printf '1\n'; else printf '0\n'; fi
+    ;;
   set-phase)
     phase="${3:-}"
     if [ -z "$phase" ]; then
@@ -48,6 +52,9 @@ case "$cmd" in
       exit 2
     fi
     _write "$(_file "$task")" phase "$phase"
+    ;;
+  set-escalated)
+    _write "$(_file "$task")" escalated 1
     ;;
   incr-attempts)
     raw=$(_read_key "$(_file "$task")" attempts)
@@ -61,7 +68,7 @@ case "$cmd" in
     ;;
   *)
     printf 'Unknown subcommand: %s\n' "$cmd" >&2
-    printf 'Usage: %s <get-phase|get-attempts|set-phase|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
+    printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
     exit 2
     ;;
 esac

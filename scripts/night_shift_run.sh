@@ -32,10 +32,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 CLAUDE="${NIGHT_SHIFT_CLAUDE:-claude}"
 GH="${NIGHT_SHIFT_GH:-gh}"
+NOTIFY="${NIGHT_SHIFT_NOTIFY:-$SCRIPT_DIR/../.claude/hooks/notify.sh}"
 ROOT="${NIGHT_SHIFT_ROOT:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)}"
 TRIGGER_LABEL="${NIGHT_SHIFT_TRIGGER_LABEL:-ready-for-agent}"
 CLAIM_LABEL="${NIGHT_SHIFT_CLAIM_LABEL:-in-progress}"
-MAX_ITERS="${NIGHT_SHIFT_MAX_ITERS:-6}"
+MAX_ATTEMPTS_K="${NIGHT_SHIFT_MAX_ATTEMPTS:-3}"  # mirrors decider default K; executor is source of truth
+# Worst-case ladder: plan+impl+val + (reimpl+val)×K-2 + (replan+impl+val) + noop = 3*K+6
+MAX_ITERS="${NIGHT_SHIFT_MAX_ITERS:-$(( 3 * MAX_ATTEMPTS_K + 6 ))}"
 DECIDER="$SCRIPT_DIR/night_shift_decide.sh"
 STORE="$SCRIPT_DIR/loop_state.sh"
 
@@ -98,6 +101,11 @@ gather_snapshot() {  # N → KEY=value lines
   root="$(_artifact_root "$branch")"
 
   local issue_ready=0 plan_present=0 report_present=0 gate=unrun pr_open=0
+  local phase escalated attempts
+  phase="$(bash "$STORE" get-phase "$n")"
+  escalated="$(bash "$STORE" get-escalated "$n")"
+  attempts="$(bash "$STORE" get-attempts "$n")"
+
   _has_label "$n" "$TRIGGER_LABEL" && issue_ready=1
   if [ -n "$slug" ]; then
     if [ -f "$root/.agents/plans/${slug}.plan.md" ] \
@@ -105,7 +113,11 @@ gather_snapshot() {  # N → KEY=value lines
       plan_present=1
     fi
     [ -f "$root/.agents/reports/${slug}-report.md" ] && report_present=1
-    [ -f "$root/.agents/plans/completed/${slug}.plan.md" ] && gate=green
+    if [ -f "$root/.agents/plans/completed/${slug}.plan.md" ]; then
+      gate=green
+    elif [ "$phase" = "validate" ] && [ "$report_present" = "1" ] && [ "$escalated" != "1" ]; then
+      gate=red
+    fi
   fi
   [ -n "$branch" ] && _pr_open "$branch" && pr_open=1
 
@@ -114,7 +126,8 @@ gather_snapshot() {  # N → KEY=value lines
   printf 'REPORT_PRESENT=%s\n' "$report_present"
   printf 'GATE=%s\n'           "$gate"
   printf 'PR_OPEN=%s\n'        "$pr_open"
-  printf 'ESCALATED=%s\n'      "0"
+  printf 'ESCALATED=%s\n'      "$escalated"
+  printf 'ATTEMPTS=%s\n'       "$attempts"
 }
 
 # --- dispatch: perform exactly the action the decider chose ------------------
@@ -140,14 +153,17 @@ dispatch() {  # decision N
   slug="$(resolve_slug "$n")"
   branch=""; [ -n "$slug" ] && branch="feat/${n}-${slug}"
   case "$decision" in
-    run-plan)
-      # Runs in the clone main checkout: /plan writes the draft here.
-      claude_run "$ROOT" "/plan ${n}"
+    run-plan|retry-replan)
+      # run-plan: clone root (no worktree yet); retry-replan: worktree (retries happen there).
+      dir="$(_artifact_root "$branch")"
+      claude_run "$dir" "/plan ${n}"
       bash "$STORE" set-phase "$n" plan
       ;;
-    run-implement)
-      # Also the clone main checkout: /implement branches + creates the worktree from here.
-      claude_run "$ROOT" "/implement ${ROOT}/.agents/plans/${slug}.plan.md"
+    run-implement|retry-reimplement)
+      # run-implement: ROOT before worktree exists; retry-reimplement: worktree.
+      dir="$(_artifact_root "$branch")"
+      pp="$(_plan_path_in "$dir" "$slug")"
+      claude_run "$dir" "/implement ${pp}"
       bash "$STORE" set-phase "$n" implement
       ;;
     run-validate)
@@ -162,6 +178,14 @@ dispatch() {  # decision N
       dir="$(_artifact_root "$branch")"
       pp="$(_plan_path_in "$dir" "$slug")"
       claude_run "$dir" "/validate ${pp}"
+      ;;
+    escalate)
+      # Notify first (bias to delivery), then mark to prevent duplicates.
+      local phase attempts
+      phase="$(bash "$STORE" get-phase "$n")"
+      attempts="$(bash "$STORE" get-attempts "$n")"
+      "$NOTIFY" fail "Night Shift escalation" "#${n}: ${phase} gate red after ${attempts} attempts — needs human triage" || true
+      bash "$STORE" set-escalated "$n"
       ;;
     noop)
       : # terminal; main releases the claim
@@ -188,6 +212,8 @@ _decide() {  # snapshot-blob → decision on stdout; the decider's exit propagat
     GATE="$(_field "$snap" GATE)" \
     PR_OPEN="$(_field "$snap" PR_OPEN)" \
     ESCALATED="$(_field "$snap" ESCALATED)" \
+    ATTEMPTS="$(_field "$snap" ATTEMPTS)" \
+    MAX_ATTEMPTS="$MAX_ATTEMPTS_K" \
     bash "$DECIDER"
 }
 
@@ -211,6 +237,12 @@ run() {
   local i
   for (( i = 1; i <= MAX_ITERS; i++ )); do
     snap="$(gather_snapshot "$n")"
+    # Advance attempt counter on red before the decider reads it, then re-gather
+    # so the snapshot forwarded to the decider reflects the incremented ATTEMPTS.
+    if [ "$(_field "$snap" GATE)" = "red" ]; then
+      bash "$STORE" incr-attempts "$n" >/dev/null
+      snap="$(gather_snapshot "$n")"
+    fi
     rc=0; decision="$(_decide "$snap")" || rc=$?
     if [ "$rc" -ne 0 ]; then
       echo "decider exited $rc for #$n (out of scope this slice)" >&2
@@ -218,11 +250,11 @@ run() {
     fi
     case "$decision" in
       noop)
-        _release "$n"          # terminal (PR open) → drop the claim
+        _release "$n"          # terminal (PR open or escalated) → drop the claim
         echo "done: #$n (released $CLAIM_LABEL)"
         return 0
         ;;
-      run-plan|run-implement|run-validate|open-pr)
+      run-plan|run-implement|run-validate|open-pr|retry-reimplement|retry-replan|escalate)
         dispatch "$decision" "$n"
         ;;
       *)
