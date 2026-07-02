@@ -8,7 +8,8 @@ Smart Zone / PIV Loop doctrine.
 
 The **Night Shift** (see `CONTEXT.md`) drives each `ready`-labelled Issue through the whole PIV
 Loop with no human between phases: a finished `/plan` triggers `/implement`, a finished
-`/implement` triggers `/validate`, and a **scheduling poll** backstops that event channel. These
+`/implement` triggers `/validate`, and a **scheduling poll** backstops that synchronous trigger
+chain. These
 are all *mechanical* triggers.
 
 ADR-0010 drew a general rule — **"hooks enforce objective red/green floors; handoffs carry semantic

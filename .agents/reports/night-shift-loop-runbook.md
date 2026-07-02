@@ -90,7 +90,7 @@ Runs one Issue at a time, sleeping between polls when the queue drains. Logs go 
 */5 * * * * cd ~/night-shift/ai-layer-template && bash scripts/night_shift_loop.sh drain >> ~/.night-shift-loop.log 2>&1
 ```
 Cron supplies the poll cadence; `drain` does one pass and exits. Simpler for cron; persistent
-is better for event-driven throughput (drain loop re-selects immediately after each executor
+is better for zero-idle throughput (drain loop re-selects immediately after each executor
 returns, with no fixed idle gap).
 
 Serial (dial = 1): only one Issue runs at a time.

@@ -296,3 +296,16 @@ concurrency 撥盤」改為「同步序列 drain + 探索/存活輪詢 + enforce
   `notify-validate-events-report.md`** — historical point-in-time reports (implementation report, the
   audit that *spawned* #86, and a report about the unrelated tmux/ntfy notification channel). Editing
   them rewrites history; the audit report *correctly* documents the drift being fixed here.
+
+## Implementation deviations (recorded during `/implement`)
+- **Tasks 4 & 6 — `async event channel` → `async event`.** The plan's prescribed replacement
+  text for Task 4 ("there is no **async event channel**") and Task 6 ("not an **async event
+  channel**") uses a *negating* phrase that still contains the literal string `event channel`,
+  which the E2E **Sweep 1** greps for case-insensitively and the Acceptance Criteria require to
+  return **empty** — an internal contradiction in the plan. Resolved by dropping the noun
+  `channel` in both spots ("there is no async event" / "not an async event"), matching the
+  phrasing the plan itself already approved for **US-20 (Task 2)** ("not an async event"). Meaning
+  is preserved (the async mechanism is still explicitly *denied*), Sweep 1 now returns empty, and
+  the last literal `event channel` is removed from canonical docs — which is *more* aligned with
+  the stated goal ("no canonical doc implies an event bus"). No other deviations; Tasks 1–3, 5,
+  7, 8 applied verbatim.
