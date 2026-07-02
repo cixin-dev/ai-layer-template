@@ -97,7 +97,7 @@ overlapping tick a clean no-op (exit 0, no cron mail). `env -u ANTHROPIC_API_KEY
 claude.ai subscription from being shadowed by a stray key. The deployed form lives in the
 `~/night-shift/ns-drain-cron.sh` wrapper (which also bakes cron's stripped PATH/HOME); the
 crontab line above inlines the same guard. Simpler for cron; persistent (above) is better for
-event-driven throughput (drain re-selects immediately after each executor returns).
+zero-idle throughput (drain re-selects immediately after each executor returns).
 
 **Grounding evidence (flock no-op on contention, zero credit):**
 
