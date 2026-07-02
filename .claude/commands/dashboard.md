@@ -36,16 +36,31 @@ For each worktree that is **not** the main repo root:
 
 **D. Night Shift loop state**
 
-The durable per-task loop state lives in `.night-shift/*.state`. Because `.night-shift/` is
-gitignored and the executor runs in its **own clone** (ADR-0024), the operator's main checkout
-usually has no state files — point `NIGHT_SHIFT_STATE_DIR` at the executor's clone to observe live
-state. This section renders `(none)` when the directory is empty or unset. A single dir is shown —
-if multiple Night Shift clones ever run concurrently (#63), only the pointed-at clone is visible here.
+The durable per-task loop state lives in `.night-shift/*.state`. Because the executor runs in its
+**own clone** (ADR-0024), that state lives *outside* this checkout — so the block below
+auto-resolves the clone by the documented convention (`~/night-shift/<repo>/`, with `<repo>` taken
+from this repo's `origin`), meaning each project's dashboard finds its **own** clone with no global
+env to cross-wire multiple downstream projects. An explicit `NIGHT_SHIFT_STATE_DIR` overrides;
+absent a convention clone it falls back to the in-checkout `.night-shift`. This section renders
+`(none)` when the resolved directory is empty. A single dir is shown — if multiple Night Shift
+clones ever run concurrently (#63), only the resolved clone is visible here.
 
 ```bash
 # loop_state.sh resolves the dir from NIGHT_SHIFT_STATE_DIR, so export it once and the glob
-# and the accessors agree.
-export NIGHT_SHIFT_STATE_DIR="${NIGHT_SHIFT_STATE_DIR:-.night-shift}"
+# and the accessors agree. The executor runs in its OWN clone (ADR-0024), so resolve that
+# clone by the documented convention — ~/night-shift/<repo>/, <repo> from THIS repo's origin —
+# so each project's dashboard finds its own clone (no global env to cross-wire projects). An
+# explicit NIGHT_SHIFT_STATE_DIR still wins; fall back to the in-checkout dir otherwise.
+if [ -z "${NIGHT_SHIFT_STATE_DIR:-}" ]; then
+  _ns_repo="$(basename -s .git "$(git remote get-url origin 2>/dev/null)" 2>/dev/null)"
+  _ns_conv="$HOME/night-shift/${_ns_repo}/.night-shift"
+  if [ -n "$_ns_repo" ] && [ -d "$_ns_conv" ]; then
+    NIGHT_SHIFT_STATE_DIR="$_ns_conv"
+  else
+    NIGHT_SHIFT_STATE_DIR=".night-shift"
+  fi
+fi
+export NIGHT_SHIFT_STATE_DIR
 for f in "$NIGHT_SHIFT_STATE_DIR"/*.state; do
   [ -e "$f" ] || continue                       # no files -> section renders (none)
   n="$(basename "$f" .state)"
@@ -180,9 +195,9 @@ Files in .agents/prds/ or .agents/plans/ (main, not completed/) with no linked G
 | ../ai-layer-template-feat26-.. | feat/26-spike       | #26   | VALIDATE  | ✅ PASS  |
 
 ## 🌙 Night Shift — Loop State (N)
-Durable per-task loop state (.night-shift/*.state; set NIGHT_SHIFT_STATE_DIR to the executor's
-clone to observe live state). In-flight tasks show their live phase; terminal tasks are marked.
-Phase shown UPPER-CASED. (none) when empty.
+Durable per-task loop state (.night-shift/*.state; auto-resolved from the executor's clone by
+convention — ~/night-shift/<repo>/ — or an explicit NIGHT_SHIFT_STATE_DIR override). In-flight
+tasks show their live phase; terminal tasks are marked. Phase shown UPPER-CASED. (none) when empty.
 | Task | Phase     | Attempts | Status                |
 |------|-----------|----------|-----------------------|
 | #42  | IMPLEMENT | 1        | ⏳ in-flight          |
