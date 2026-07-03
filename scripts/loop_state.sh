@@ -25,7 +25,7 @@ cmd="${1:-}"
 task="${2:-}"
 
 if [ -z "$cmd" ] || [ -z "$task" ] && [ "$cmd" != "--help" ]; then
-  printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
+  printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts|clear> <task> [phase]\n' "$(basename "$0")" >&2
   exit 2
 fi
 
@@ -56,6 +56,9 @@ case "$cmd" in
   set-escalated)
     _write "$(_file "$task")" escalated 1
     ;;
+  clear)
+    rm -f "$(_file "$task")"
+    ;;
   incr-attempts)
     raw=$(_read_key "$(_file "$task")" attempts)
     if printf '%s' "$raw" | grep -qE '^[0-9]+$'; then
@@ -68,7 +71,7 @@ case "$cmd" in
     ;;
   *)
     printf 'Unknown subcommand: %s\n' "$cmd" >&2
-    printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts> <task> [phase]\n' "$(basename "$0")" >&2
+    printf 'Usage: %s <get-phase|get-attempts|get-escalated|set-phase|set-escalated|incr-attempts|clear> <task> [phase]\n' "$(basename "$0")" >&2
     exit 2
     ;;
 esac
