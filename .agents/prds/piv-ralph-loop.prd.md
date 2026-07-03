@@ -84,12 +84,16 @@ is ready, or a task is stuck.
     on stuck tasks, so that I keep a kill switch and the loop has a natural quiescence.
 17. As an operator, I want to run the loop serially (one task at a time) in v1, so that I can
     prove the engine is correct before increasing blast radius.
-18. As an operator, I want concurrency to be a graduatable dial (1 → N), so that I can raise
-    throughput later without re-architecting.
-19. As an operator, I want a ~5-minute poll to pick up newly-`ready` Issues and to catch any
-    dropped completion event, so that the loop makes progress even if an event is missed.
+18. As an operator, I want concurrency to be a guarded dial that today enforces serial (=1 —
+    any other value is rejected), so that v1 blast radius stays bounded; graduating to N is
+    flagged as later work that requires building real parallel dispatch, not just raising the
+    number.
+19. As an operator, I want a ~5-minute poll to discover newly-`ready` Issues and confirm the
+    loop is alive, so that freshly-labelled work gets picked up and a wedged loop is visible.
 20. As an operator, I want a finished phase to immediately trigger the next phase
-    (event-driven happy path), so that a task doesn't idle up to 5 minutes at each transition.
+    (a synchronous zero-idle drain — the phase call returns and the loop re-selects at once,
+    in one process, not an async event), so that a task doesn't idle up to 5 minutes at each
+    transition.
 21. As an operator, I want the loop to skip Issues not labelled `ready`, so that I can stage
     work and release it to the Night Shift deliberately.
 22. As a maintainer, I want the loop's next-action logic isolated as a pure decider, so that
@@ -151,9 +155,10 @@ is ready, or a task is stuck.
   (CLAUDE.md Smart Zone; the Ralph note's central warning that a single long loop session is
   "a more complex Ralph Loop without the protection of session isolation").
 
-- **Trigger model = hybrid.** Event-driven on the happy path (a finished phase immediately
-  triggers the next), with a ~5-minute poll as a safety net that (a) discovers newly-`ready`
-  Issues and (b) recovers any dropped completion event. The runtime substrate (cron /
+- **Trigger model = hybrid.** A synchronous zero-idle drain on the happy path (each finished
+  phase returns and the loop re-selects the next work at once, in one process — there is no
+  async event), with a ~5-minute poll as a safety net that (a) discovers newly-`ready`
+  Issues and (b) provides liveness. The runtime substrate (cron /
   `/loop`+`/routines` / a Workflow engine) is deliberately NOT fixed here — it is a
   `/plan`-phase decision **(now decided — see ADR-0026: shell drain+poll loop)**. This PRD fixes
   only behavior.
@@ -175,9 +180,11 @@ is ready, or a task is stuck.
   `security_guard.py` (force-push, push-to-default-branch; ADR-0020) stays enforced
   independently, so benign-push graduation never relaxes the hard floor.
 
-- **Concurrency is a dial, default 1.** v1 runs serial (one task through the full pipeline at
-  a time). The design reserves the existing `piv-loop` "parallel-implement / serial-landing"
-  protocol as the graduation path to N. Raising the dial is a later, deliberate action.
+- **Concurrency is a guarded dial, default 1.** v1 runs serial (one task through the full
+  pipeline at a time); the dial today is only an *enforce-serial guard* — any value ≠ 1 is
+  rejected and there is no parallel-dispatch path. The design reserves the existing `piv-loop`
+  "parallel-implement / serial-landing" protocol as the graduation path to N, but graduating is
+  real parallel-dispatch work, not just raising the number — a later, deliberate action.
 
 - **Exactly one human gate (PR review).** The loop never auto-merges. `/validate` continues
   to archive the plan to `completed/` on green (ADR-0013); the loop does not alter the PIV
