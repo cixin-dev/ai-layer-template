@@ -67,6 +67,13 @@ case "$1 $2" in
       printf '%s\t%s%s\n' "$num" "$labels" "$extra"
     done <<< "${FAKE_GH_TSV:-}"
     ;;
+  "issue view")
+    # `gh issue view <n> --json state --jq .state` → print the raw state string.
+    # FAKE_CLOSED is a space-list of issue numbers to report CLOSED; all others OPEN.
+    n="$3"; st="OPEN"
+    for c in ${FAKE_CLOSED:-}; do [ "$c" = "$n" ] && st="CLOSED"; done
+    printf '%s\n' "$st"
+    ;;
 esac
 exit 0
 GHEOF
@@ -263,6 +270,53 @@ run62_d4="$(grep -c '^run 62$' "$TL_D4" || echo 0)"
 assert_eq "$run62_d4" "1" "(D4) stuck issue 62 dispatched exactly once (H1 bound preserved)"
 run63_d4="$(grep -c '^run 63$' "$TL_D4" || echo 0)"
 assert_eq "$run63_d4" "1" "(D4) higher issue 63 dispatched once (would be 0 pre-fix — starved)"
+
+# =============================================================================
+# Slice G — poll-time GC of closed-Issue loop state (drain sweep, #97)
+# =============================================================================
+
+# (G1) drain GC-sweeps CLOSED-Issue state and spares OPEN ones. 84 is CLOSED →
+# its .state is cleared; 86 (escalated-but-open) and 87 (pr-open-but-open) keep
+# their Issue OPEN → their .state survives. Empty queue (FAKE_GH_TSV="") so the
+# drain does nothing but the sweep.
+ST_G1="$WORK/state-g1"; mkdir -p "$ST_G1"
+RS_G1="$WORK/run-g1"; mkdir -p "$RS_G1"
+printf 'phase=plan\n'                  > "$ST_G1/84.state"
+printf 'phase=validate\nescalated=1\n' > "$ST_G1/86.state"
+printf 'phase=plan\n'                  > "$ST_G1/87.state"
+RC=0
+OUT_G1="$(NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+           NIGHT_SHIFT_SLEEP="$BIN/fakesleep" \
+           RUN_STATE="$RS_G1" NIGHT_SHIFT_STATE_DIR="$ST_G1" \
+           FAKE_GH_TSV="" FAKE_CLOSED="84" \
+           bash "$LOOP" drain 2>&1)" || RC=$?
+assert_eq "$RC" "0" "(G1) drain with GC sweep → exit 0"
+[ -e "$ST_G1/84.state" ] && g1_84=present || g1_84=gone
+assert_eq "$g1_84" "gone" "(G1) CLOSED #84 state cleared"
+[ -e "$ST_G1/86.state" ] && g1_86=present || g1_86=gone
+assert_eq "$g1_86" "present" "(G1) escalated-but-open #86 state survives"
+[ -e "$ST_G1/87.state" ] && g1_87=present || g1_87=gone
+assert_eq "$g1_87" "present" "(G1) pr-open-but-open #87 state survives"
+assert_contains "$OUT_G1" "gc: #84" "(G1) GC logged the clear of #84"
+
+# (G2) stop-sentinel safety: the *.state glob never matches the `stop` kill switch.
+# State dir holds only `stop` + 88.state (CLOSED). drain GC-sweeps BEFORE the
+# kill-switch short-circuit → 88.state cleared, stop file untouched.
+ST_G2="$WORK/state-g2"; mkdir -p "$ST_G2"
+RS_G2="$WORK/run-g2"; mkdir -p "$RS_G2"
+: > "$ST_G2/stop"
+printf 'phase=plan\n' > "$ST_G2/88.state"
+RC=0
+OUT_G2="$(NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+           NIGHT_SHIFT_SLEEP="$BIN/fakesleep" \
+           RUN_STATE="$RS_G2" NIGHT_SHIFT_STATE_DIR="$ST_G2" \
+           FAKE_GH_TSV="" FAKE_CLOSED="88" \
+           bash "$LOOP" drain 2>&1)" || RC=$?
+assert_eq "$RC" "0" "(G2) drain with stop sentinel present → exit 0"
+[ -e "$ST_G2/stop" ] && g2_stop=present || g2_stop=gone
+assert_eq "$g2_stop" "present" "(G2) stop sentinel untouched by GC (*.state glob excludes it)"
+[ -e "$ST_G2/88.state" ] && g2_88=present || g2_88=gone
+assert_eq "$g2_88" "gone" "(G2) CLOSED #88 state cleared before kill-switch short-circuit"
 
 # =============================================================================
 # Slice L — loop (persistent poll + kill switch)

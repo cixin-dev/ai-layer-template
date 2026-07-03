@@ -41,6 +41,7 @@ CONCURRENCY="${NIGHT_SHIFT_CONCURRENCY:-1}"
 MAX_POLLS="${NIGHT_SHIFT_MAX_POLLS:-}"
 export NIGHT_SHIFT_STATE_DIR="${NIGHT_SHIFT_STATE_DIR:-$ROOT/.night-shift}"
 STOP_FILE="${NIGHT_SHIFT_STOP_FILE:-$NIGHT_SHIFT_STATE_DIR/stop}"
+STORE="$SCRIPT_DIR/loop_state.sh"          # sibling loop-state script (night_shift_run.sh:43)
 
 # --- selection seams ---------------------------------------------------------
 
@@ -89,10 +90,32 @@ _require_serial() {
 
 _stopped() { [ -f "$STOP_FILE" ]; }
 
+# _gc_closed_states — poll-time GC (#97): drop <N>.state for any task whose Issue is
+# CLOSED (the same signal the dashboard uses). Keyed on Issue-CLOSED ONLY: a merged PR
+# closes its Issue, so merge → close → next poll → GC. Escalated-but-open and
+# PR-open-but-unmerged tasks keep their Issue OPEN and so survive (deleting either would
+# re-escalate / re-plan from scratch). The *.state glob excludes the `stop` sentinel by
+# construction. Fail-safe: delete ONLY on an exact CLOSED (allowlist) — a gh error/empty
+# read is treated as "keep" (a lingering file is harmless; an erroneous delete is not).
+_gc_closed_states() {
+  local f n state
+  for f in "$NIGHT_SHIFT_STATE_DIR"/*.state; do
+    [ -e "$f" ] || continue                       # no matches → literal glob → skip
+    n="$(basename "$f" .state)"
+    case "$n" in ''|*[!0-9]*) continue ;; esac    # only Issue-numbered state files
+    state="$("$GH" issue view "$n" --json state --jq .state 2>/dev/null || true)"
+    if [ "$state" = "CLOSED" ]; then
+      echo "gc: #$n closed — clearing loop state"
+      bash "$STORE" clear "$n" || true
+    fi
+  done
+}
+
 # --- subcommands -------------------------------------------------------------
 
 drain() {
   _require_serial || return $?
+  _gc_closed_states                    # poll-time GC of closed-Issue loop state (#97)
   local dispatched=""
   while :; do
     if _stopped; then

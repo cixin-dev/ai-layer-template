@@ -116,6 +116,19 @@ printf 'phase=validate\nattempts=2\n' > "$NIGHT_SHIFT_STATE_DIR/task-n.state"
 got=$(bash "$STORE" get-escalated task-n)
 assert_eq "$got" "0" "(n) no escalated key → default 0"
 
+# (o) clear removes the state file: write a phase, clear, get-phase empty + file gone
+bash "$STORE" set-phase task-o plan
+bash "$STORE" clear task-o
+got=$(bash "$STORE" get-phase task-o)
+assert_eq "$got" "" "(o) clear → get-phase empty"
+[ -e "$NIGHT_SHIFT_STATE_DIR/task-o.state" ] && exists=yes || exists=no
+assert_eq "$exists" "no" "(o) clear removes the on-disk .state file"
+
+# (p) clear on a never-created task is an idempotent no-op (rc 0)
+rc=0
+bash "$STORE" clear task-p || rc=$?
+assert_eq "$rc" "0" "(p) clear absent task → rc 0 (idempotent)"
+
 # --- summary -------------------------------------------------------------------
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
