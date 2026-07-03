@@ -75,9 +75,16 @@ E2E plan section. A runbook/operator-card grounding block is free-floating prose
    running. So assert the known-bad actually **ran**: run the fake directly and confirm a
    real return code (rc 0, not 127), not just that its output looks right. A case that reaches
    its expected result by never executing is **forged**, however the two outputs compare.
+4. **Launch/operational commands count too — a missing grounding block is the finding.** A
+   start/cron/daemon command block is not exempt just because it carries no `# → observed:`
+   line; its *absence* is the miss (§4 of the loop runbook shipped an unguarded `*/5` cron
+   exactly this way). Any command a scheduler re-enters (a cron `drain`) must carry its
+   concurrency guard — `flock` for a tick that can outlast its interval — **and** a grounding
+   block proving the guard no-ops on contention; re-run that block here like any check.
 
-**FAIL the gate** if any documented check cannot be re-run, does not flip, or can't prove the
-known-bad actually executed. This is the mechanical enforcement of the Verification-led rule — prose forbade
+**FAIL the gate** if any documented check cannot be re-run, does not flip, can't prove the
+known-bad actually executed, or a launch/operational command lacks its re-entrancy guard and a
+re-run grounding block. This is the mechanical enforcement of the Verification-led rule — prose forbade
 shipping unrun checks twice (retroactives `verify-check-commands`, `validate-reexec-operator-checks`)
 and it still recurred, so the gate now re-executes rather than trusting the page.
 

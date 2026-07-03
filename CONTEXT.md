@@ -261,8 +261,8 @@ reviews the PR. The loop advances by a **synchronous zero-idle drain** on the ha
 finished phase returns and the loop re-selects the next work at once, in one process — not an
 async event); a **scheduling poll** — a periodic machine sweep (*not* a human's
 dashboard-checking) — is the backstop that discovers newly `ready-for-agent` Issues and keeps the
-loop live (its runtime substrate stays a `/plan` decision; the loop's triggers *schedule* phases
-but never *judge* completion — ADR-0023).
+loop live (its runtime substrate is ADR-0026's shell drain+poll loop; the loop's triggers
+*schedule* phases but never *judge* completion — ADR-0023).
 _Avoid_: "PIV Ralph Loop" (the PRD title — a descriptive label, not the canonical name);
 conflating with **Unattended Autonomy** (the layer below — that gates *inputs*; the Night Shift
 removes *orchestration*); a single long `/loop` session chaining phases (a naive **Ralph Loop**, no
