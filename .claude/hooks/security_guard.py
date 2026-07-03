@@ -119,7 +119,12 @@ def check_opaque_exec(tool_name: str, tool_input: dict) -> str | None:
         if re.search(pattern, command):
             return (
                 f"Blocked: untrusted opaque code execution detected in command: {command!r}. "
-                "Review and run it manually (e.g. `! …`) if you trust it."
+                "If this is a code SEARCH (grep/rg/sed/awk) whose quoted regex literally "
+                "contains `| sh`, `| bash`, `$(`, or a backtick, this is a FALSE match — the "
+                "guard string-matches the whole command, quoted pattern literals included, so "
+                "it can't tell an executed `| bash` from those bytes inside a regex. Re-run the "
+                "search with the Grep tool, which this Bash-only check never inspects. For a "
+                "pipeline you actually intend, run it manually (e.g. `! …`)."
             )
     return None
 
