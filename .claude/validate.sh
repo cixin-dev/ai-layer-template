@@ -5,4 +5,5 @@ dir="$(dirname "$0")/../scripts"
 rc=0
 bash "$dir/exec_bit_check.sh" || rc=1
 bash "$dir/piv_check.sh" || rc=1
+bash "$dir/launch_guard_check.sh" || rc=1
 exit "$rc"
