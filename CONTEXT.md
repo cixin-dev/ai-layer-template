@@ -257,10 +257,12 @@ overnight. Its load-bearing property is that **each phase runs in its own fresh,
 the loop automates the human's "open a new session and type the next command," and never chains
 phases in one long context — that would forfeit session isolation and rot the context (see **Ralph
 Loop**). The human keeps both bookends — the **Day Shift** loads the queue, the **boundary gate**
-reviews the PR. The loop advances event-driven on the happy path; a **scheduling poll** — a periodic
-machine sweep (*not* a human's dashboard-checking) — is the backstop that picks up newly
-`ready-for-agent` Issues and recovers dropped completion events (its runtime substrate stays a
-`/plan` decision; the loop's triggers *schedule* phases but never *judge* completion — ADR-0023).
+reviews the PR. The loop advances by a **synchronous zero-idle drain** on the happy path (each
+finished phase returns and the loop re-selects the next work at once, in one process — not an
+async event); a **scheduling poll** — a periodic machine sweep (*not* a human's
+dashboard-checking) — is the backstop that discovers newly `ready-for-agent` Issues and keeps the
+loop live (its runtime substrate is ADR-0026's shell drain+poll loop; the loop's triggers
+*schedule* phases but never *judge* completion — ADR-0023).
 _Avoid_: "PIV Ralph Loop" (the PRD title — a descriptive label, not the canonical name);
 conflating with **Unattended Autonomy** (the layer below — that gates *inputs*; the Night Shift
 removes *orchestration*); a single long `/loop` session chaining phases (a naive **Ralph Loop**, no
