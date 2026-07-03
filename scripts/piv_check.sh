@@ -49,14 +49,32 @@ case "$branch" in
     ;;
 esac
 
-# Resolve the base ref: prefer local, fall back to origin/.
-base_ref="$default_branch"
-if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
-  base_ref="origin/$default_branch"
-  if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
-    echo "[piv-check] base ref '$default_branch' not found locally or in origin; skipping range checks" >&2
-    exit 0
+# Resolve the base ref against which the branch's OWN commits are measured.
+# The integration line lives in two refs that can drift: local <default> and
+# origin/<default>. A clone whose local <default> lags origin/ — a sibling PR
+# squash-merged into origin/ mid-drive but never fast-forwarded into local
+# (Night Shift #97) — would, if measured against the stale local ref, mis-read
+# that already-integrated upstream commit as the branch's FIRST commit and trip
+# Check 1. Subtract the MORE-ADVANCED of the two (the one that has the other as
+# an ancestor) so every already-integrated commit is excluded regardless of
+# which ref lags. Offline clones with only a local ref use it; if neither
+# exists, skip.
+local_ref=""; origin_ref=""
+if git rev-parse --verify "$default_branch" >/dev/null 2>&1; then local_ref="$default_branch"; fi
+if git rev-parse --verify "origin/$default_branch" >/dev/null 2>&1; then origin_ref="origin/$default_branch"; fi
+if [ -n "$local_ref" ] && [ -n "$origin_ref" ]; then
+  if git merge-base --is-ancestor "$local_ref" "$origin_ref" 2>/dev/null; then
+    base_ref="$origin_ref"   # local lags (or equals) origin → origin is the true tip
+  else
+    base_ref="$local_ref"    # origin lags or diverged → trust the local integration ref
   fi
+elif [ -n "$origin_ref" ]; then
+  base_ref="$origin_ref"
+elif [ -n "$local_ref" ]; then
+  base_ref="$local_ref"
+else
+  echo "[piv-check] base ref '$default_branch' not found locally or in origin; skipping range checks" >&2
+  exit 0
 fi
 
 # --- Check 1: plan file is the first commit on the branch ---

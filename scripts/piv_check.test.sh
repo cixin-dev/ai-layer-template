@@ -212,6 +212,31 @@ git -C "$REPO_I" checkout -q "$(git -C "$REPO_I" rev-parse HEAD)"
 output_i="$(cd "$REPO_I" && bash "$CHECK" 2>&1)"
 assert_skipped "$output_i" "test(i): detached HEAD skips"
 
+# --- Test (o): local main behind origin/main → plan still reads as first commit ---
+# Reproduces the Night Shift #97 drift: a sibling PR (#95) squash-merged into
+# origin/main mid-drive, but the clone's local main was never fast-forwarded, so
+# the branch descends from origin/main while local main lags by one commit.
+# Measuring against the stale LOCAL main mis-reads that already-integrated
+# upstream commit as the branch's first commit and trips Check 1. Anchoring to
+# the more-advanced integration ref (origin/main here) excludes it → plan is
+# correctly seen as the first commit.
+REPO_O="$TMPDIR_ROOT/repo_o"
+make_repo "$REPO_O"                                   # local main = C0 (init)
+git -C "$REPO_O" checkout -q -b upstream-sim
+echo "sibling" > "$REPO_O/SIBLING.md"                 # unrelated upstream doc (#95)
+git -C "$REPO_O" add SIBLING.md
+git -C "$REPO_O" commit -q -m "docs: unrelated sibling landed upstream"
+UPSTREAM_SHA="$(git -C "$REPO_O" rev-parse HEAD)"
+git -C "$REPO_O" checkout -q main
+# Record it as origin/main WITHOUT fast-forwarding local main (the drift).
+git -C "$REPO_O" update-ref refs/remotes/origin/main "$UPSTREAM_SHA"
+# Executor cuts the feature branch from the current integration line (origin/main),
+# then seeds the plan as the branch's first commit.
+git -C "$REPO_O" checkout -q -b feat/issue-97 "$UPSTREAM_SHA"
+add_plan "$REPO_O" "state-gc"
+output_o="$(cd "$REPO_O" && bash "$CHECK" 2>&1)"
+assert_pass "$output_o" "test(o): branch off origin/main with local main behind → plan is first commit"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
 else
