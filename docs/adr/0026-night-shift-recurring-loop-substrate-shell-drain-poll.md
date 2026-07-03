@@ -33,32 +33,32 @@ grounded in that script:
 1. **A thin selection wrapper, not an orchestrator.** The loop runs in the Night Shift's own clone
    (ADR-0024) and holds **no phase logic**: it only `select`s the next grabbable Issue and hands it
    to the executor (`night_shift_run.sh`), which owns the claim and the phase-chaining. The per-phase
-   `claude -p` substrate stays ADR-0024's. (`night_shift_loop.sh:1-9`, `select_issue:60-72`.)
+   `claude -p` substrate stays ADR-0024's. (`select_issue`; the executor is `RUN` → `night_shift_run.sh`.)
 
 2. **Hybrid cadence realized as drain-then-poll.** `drain()` runs Issues back-to-back with **zero
    idle wait** while the ready set is non-empty — the event-driven happy path. `loop()` sleeps
    `NIGHT_SHIFT_POLL_INTERVAL` (**default 300s ≈ 5 min**) only when a drain pass finds nothing — the
    safety-net poll that re-discovers newly-ready Issues and recovers dropped completions.
-   (`drain:87-116`, `loop:118-136`, interval default `:24`/`:38`.)
+   (`drain`, `loop`; interval `POLL_INTERVAL`.)
 
 3. **Level-triggered on durable artifact state**, not an async event bus. Selection reads the
    executor's side-effects — the `in-progress` claim label, and `PR_OPEN`/`ESCALATED` from
    `snapshot` — so the loop is restartable and idempotent (consistent with ADR-0023's pure-state
    decider). A **no-progress guard** ends the pass if the same Issue re-selects after dispatch,
    backing a hot-spin off to the poll interval instead of re-running its full PIV cycle with zero
-   wait. (`select_issue:60-72`, `_terminal_for:56-58`, `drain:97-107`.)
+   wait. (`select_issue`, `_terminal_for`, `drain`.)
 
 4. **Serial v1.** `NIGHT_SHIFT_CONCURRENCY` defaults to 1; `_require_serial` rejects any other value
    with `rc 2` before any `gh`/executor call — N is a reserved graduation, not a supported mode.
-   (`_require_serial:76-81`, `drain:88`, `loop:119`.)
+   (`_require_serial`, `drain`, `loop`.)
 
 5. **Kill switch = file sentinel *and* signal trap.** A `.night-shift/stop` file (`_stopped`) checked
    each iteration, plus an `INT`/`TERM` trap in `loop()`. Either stops the loop cleanly.
-   (`_stopped:83`, `drain:91`, `loop:120`,`:123`.)
+   (`_stopped`, `drain`, `loop`.)
 
 6. **DI seams make it offline-testable.** `gh`, the executor (`RUN`), and `sleep` are all
    dependency-injected, so the loop is exhaustively unit-tested with **zero credit spend**
-   (`scripts/night_shift_loop.test.sh`). (`night_shift_loop.sh:17-28`.)
+   (`scripts/night_shift_loop.test.sh`). (the `GH`/`RUN`/`SLEEP` DI seams.)
 
 ## Why this over the alternatives
 
