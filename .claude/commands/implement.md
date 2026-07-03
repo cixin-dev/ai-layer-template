@@ -124,6 +124,14 @@ Issue's state — closing it or moving its labels belongs to Validate / human re
 implementer (self-promoting your own work defeats the PIV separation). Comment only; leave the
 Issue open.
 
+The comment is a **best-effort courtesy for interactive runs**, not a required step. In a
+headless / auto-mode run (the Night Shift `claude -p` executor) the classifier denies it **by
+design** — an external write to an Issue this session did not create — so treat the denial as an
+**expected silent skip**, never a "Blocked — needs you" escalation. Nothing is lost: the durable
+Issue↔PR link is `/validate`'s `Closes #N` (auto-closes on merge) and the report is the durable
+record. Don't "fix" the denial by widening the permission dial — that is an operator-only
+self-mod and weakens a real floor.
+
 ## Phase 5 — Output
 
 Report branch, per-task validation results, files changed, deviations, and artifact paths.
