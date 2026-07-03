@@ -109,8 +109,13 @@ drain() {
       # bound), and loop()'s idle sleep is the cross-pass backoff that gives the stuck
       # Issue one more try next poll. Skipping it here is what lets higher-numbered
       # ready Issues still drain (#84).
-      stuck="$(select_issue)"
-      [ -n "$stuck" ] && echo "no progress on #$stuck (still selectable after dispatch) — ending drain pass to back off" >&2
+      # Only re-probe when we actually dispatched this pass: on an idle poll
+      # (dispatched empty) nothing can be stuck-after-dispatch, so skip the
+      # extra `gh` round the un-excluded select would otherwise cost every poll.
+      if [ -n "$dispatched" ]; then
+        local stuck; stuck="$(select_issue)"
+        [ -n "$stuck" ] && echo "no progress on #$stuck (still selectable after dispatch) — ending drain pass to back off" >&2
+      fi
       return 0
     fi
     echo "dispatch: #$n"
