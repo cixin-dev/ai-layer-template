@@ -87,16 +87,18 @@ Runs one Issue at a time, sleeping between polls when the queue drains. Logs go 
 
 **Cron (external poll cadence, one drain per invocation) — flock-guarded:**
 ```cron
-*/5 * * * * cd ~/night-shift/ai-layer-template && flock -n -E 0 ~/.night-shift-loop.lock env -u ANTHROPIC_API_KEY bash scripts/night_shift_loop.sh drain >> ~/.night-shift-loop.log 2>&1
+*/5 * * * * cd ~/night-shift/ai-layer-template && flock -n -E 0 ~/.night-shift-loop.lock bash scripts/night_shift_loop.sh drain >> ~/.night-shift-loop.log 2>&1
 ```
 Cron supplies the poll cadence; `drain` does one pass and exits. The `flock -n -E 0` guard is
 **not optional**: a PIV drive runs many minutes — longer than the 5-min tick — so without the
 lock the next tick would start a SECOND concurrent executor on the next Issue (two `claude -p`
 sessions doing `git pull`/`push` in one clone = the HEAD race, ADR-0024). `-n -E 0` makes an
-overlapping tick a clean no-op (exit 0, no cron mail). `env -u ANTHROPIC_API_KEY` keeps the
-claude.ai subscription from being shadowed by a stray key. The deployed form lives in the
-`~/night-shift/ns-drain-cron.sh` wrapper (which also bakes cron's stripped PATH/HOME); the
-crontab line above inlines the same guard. Simpler for cron; persistent (above) is better for
+overlapping tick a clean no-op (exit 0, no cron mail). No per-call `env -u ANTHROPIC_API_KEY`
+scrub is inlined here: ADR-0024 makes the host's **unexported** `ANTHROPIC_API_KEY` an
+operational precondition — the fix is a clean host, not scrubbing at every launch. The deployed
+form lives in the `~/night-shift/ns-drain-cron.sh` wrapper (which also bakes cron's stripped
+PATH/HOME); the crontab line above inlines the same `flock` guard (and, like the wrapper should,
+no `env -u`). Simpler for cron; persistent (above) is better for
 zero-idle throughput (drain re-selects immediately after each executor returns).
 
 **Grounding evidence (flock no-op on contention, zero credit):**
