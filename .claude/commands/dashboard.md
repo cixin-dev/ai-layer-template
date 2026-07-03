@@ -37,20 +37,24 @@ For each worktree that is **not** the main repo root:
 **D. Night Shift loop state**
 
 The durable per-task loop state lives in `.night-shift/*.state`. Because the executor runs in its
-**own clone** (ADR-0024), that state lives *outside* this checkout — so the block below
-auto-resolves the clone by the documented convention (`~/night-shift/<repo>/`, with `<repo>` taken
-from this repo's `origin`), meaning each project's dashboard finds its **own** clone with no global
-env to cross-wire multiple downstream projects. An explicit `NIGHT_SHIFT_STATE_DIR` overrides;
-absent a convention clone it falls back to the in-checkout `.night-shift`. This section renders
-`(none)` when the resolved directory is empty. A single dir is shown — if multiple Night Shift
-clones ever run concurrently (#63), only the resolved clone is visible here.
+**own clone** (ADR-0024), that state lives *outside* this checkout. The durable way to locate it is
+the **`clone pointer`** — the executor publishes its clone's path for observers to read (ADR-0027);
+**until Task 2 implements that**, the block below uses an **interim convention guess**
+(`~/night-shift/<repo>/`, `<repo>` from this repo's `origin`) — *not* a documented path (ADR-0024
+documents the own-clone, **not** this layout). Known limitation this interim keeps: if the clone is
+ever off-convention it **silently** falls back to an empty in-checkout `.night-shift` and renders
+`(none)` for a *live* loop — the false-negative ADR-0027 removes. An explicit `NIGHT_SHIFT_STATE_DIR`
+overrides. This section renders `(none)` when the resolved directory is empty. A single dir is shown
+— if multiple Night Shift clones ever run concurrently (#63), only the resolved clone is visible
+here.
 
 ```bash
 # loop_state.sh resolves the dir from NIGHT_SHIFT_STATE_DIR, so export it once and the glob
-# and the accessors agree. The executor runs in its OWN clone (ADR-0024), so resolve that
-# clone by the documented convention — ~/night-shift/<repo>/, <repo> from THIS repo's origin —
-# so each project's dashboard finds its own clone (no global env to cross-wire projects). An
-# explicit NIGHT_SHIFT_STATE_DIR still wins; fall back to the in-checkout dir otherwise.
+# and the accessors agree. The executor runs in its OWN clone (ADR-0024); the durable way to
+# locate it is the clone pointer (ADR-0027), which Task 2 implements. Until then this is an
+# INTERIM convention guess — ~/night-shift/<repo>/, <repo> from THIS repo's origin — NOT a
+# documented path; if the clone is off-convention it silently falls back to the in-checkout
+# dir (the false-negative ADR-0027 removes). An explicit NIGHT_SHIFT_STATE_DIR still wins.
 if [ -z "${NIGHT_SHIFT_STATE_DIR:-}" ]; then
   _ns_repo="$(basename -s .git "$(git remote get-url origin 2>/dev/null)" 2>/dev/null)"
   _ns_conv="$HOME/night-shift/${_ns_repo}/.night-shift"

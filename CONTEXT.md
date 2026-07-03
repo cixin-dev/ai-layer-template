@@ -275,6 +275,17 @@ bookend (reviewing the PR) is the **boundary gate**, not the Day Shift.
 _Avoid_: stretching it to cover PR review (that is the **boundary gate**); reading it as a clock —
 it names the human's queue-loading work, not a time of day.
 
+**clone pointer**:
+A well-known file the Night Shift executor writes on every drain, holding the single-line absolute
+path to its own **clone**'s main checkout (`$XDG_STATE_HOME/night-shift/<repo>/clone-root`). It makes
+the executor **self-locating** — it *publishes* where it is, so any read-only observer (`/dashboard`
+today, #63 multi-clone tooling later) locates the live clone instead of guessing a convention path.
+Lives *outside* the clone by necessity: an observer that does not yet know where the clone is cannot
+read a file inside it (chicken-and-egg). See ADR-0027.
+_Avoid_: location beacon (implies active broadcast; this is a passively-read file); pointer file
+(too generic — the canonical name says what it points at); convention path (the guess-the-path
+approach this replaces — ADR-0027).
+
 **Ralph Loop**:
 The borrowed brute-force technique this project is contrasted *against* — run an agent in a
 `while`-loop that re-feeds the same prompt, letting it recover state from the filesystem and git
