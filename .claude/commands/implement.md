@@ -29,6 +29,7 @@ Check git state.
 | State | Action |
 |-------|--------|
 | Clean, on main, in sync with origin | Create a feature branch (naming below) |
+| Clean, on main but behind origin/main | `git pull --ff-only` first to bring local main to origin's tip, *then* branch. The branch must be cut from the current integration line — a branch cut from a stale local main misses siblings merged mid-session (a sibling PR / retroactive) at `/validate` time, and those origin-only commits read as the branch's own leading commits to `piv_check` Check 1 (retroactive: piv-check-base-ref-drift) |
 | Clean, on main but ahead of origin/main | STOP — main has local-only commits, which breaks the never-commit-to-main rule. Surface them to the user and resolve (move to a branch, or push if truly intended) before proceeding — do not silently auto-push |
 | Dirty, on main (tracked files modified) | STOP — ask the user to stash or commit first |
 | On main, only untracked files under `.agents/plans/` | Expected — that's the plan draft awaiting pickup (see "Seed the plan" below); proceed |
@@ -37,7 +38,10 @@ Check git state.
 Before branching, run `git log origin/main..main --oneline` as a tripwire — main should never
 be ahead of origin (every change flows through a branch + PR; see CLAUDE.md Do-not). If commits
 appear, the invariant was breached upstream: stop and surface them rather than silently pushing,
-since a local-only main commit becomes a divergence after the next squash-merge.
+since a local-only main commit becomes a divergence after the next squash-merge. The symmetric
+`git log main..origin/main --oneline` shows origin *ahead* of local main — routine (a sibling PR
+or retroactive merged since your last pull); `git pull --ff-only` before branching so the branch
+descends from the real integration line, not a stale base.
 
 Branch name: `feat/{N}-{slug}` when the plan carries an Issue number (the Issue's number plus
 a short slug); otherwise `feat/{plan-name}` (the plan file's kebab-case name).
