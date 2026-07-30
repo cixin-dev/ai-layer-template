@@ -15,7 +15,7 @@ checkout and reads `.night-shift/*.state` to show per-task PIV progress — but 
 lives in the *executor's* clone, not the observer's checkout. #63 multi-clone tooling will have the
 same need.
 
-With no canonical source of truth for the location, PR 91 had the dashboard **guess a convention
+With no canonical source of truth for the location, the dashboard **guessed a convention
 path** (`~/night-shift/<repo>/`) and **mis-cited it to ADR-0024** (which documents no such path — a
 Verification-led violation). Worse, a wrong guess degrades **silently**: the dir check fails, the
 dashboard falls back to an empty in-checkout `.night-shift`, and renders `(none)` for a **live**
@@ -42,7 +42,7 @@ remotes.
 Key properties:
 
 1. **Self-locating, not guessed.** The executor *publishes* where it is; observers *read* it. This
-   replaces PR 91's convention guess for good.
+   replaces the convention guess for good.
 2. **Written every drain, idempotent.** The location is always current truth — it cannot drift when
    the clone moves or is rebuilt. Written **before** the queue scan, so an idle-but-live clone still
    publishes (letting an observer distinguish "idle" from "absent").
@@ -71,6 +71,6 @@ Key properties:
   the remote `main`, so that configuration is already forbidden. Cross-org same-basename repos
   (`orgA/foo` vs `orgB/foo`) collide on the key too; acceptable for a single-operator, single-org
   host.
-- **Sequencing.** This ADR records the decision; the executor-writes / dashboard-reads code lands in
-  a separate PIV loop (Task 2), which also re-points the dashboard's citation from ADR-0024 to this
-  ADR and removes the silent fallback.
+- **Sequencing.** This ADR records the *decision*. The implementation — the executor writing the
+  pointer, observers reading it in place of the interim convention guess, and the silent fallback
+  giving way to the loud degrade above — lands in a separate change.

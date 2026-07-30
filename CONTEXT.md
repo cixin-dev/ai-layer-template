@@ -276,8 +276,9 @@ _Avoid_: stretching it to cover PR review (that is the **boundary gate**); readi
 it names the human's queue-loading work, not a time of day.
 
 **clone pointer**:
-A well-known file the Night Shift executor writes on every drain, holding the single-line absolute
-path to its own **clone**'s main checkout (`$XDG_STATE_HOME/night-shift/<repo>/clone-root`). It makes
+A well-known file (at `$XDG_STATE_HOME/night-shift/<repo>/clone-root`) the Night Shift executor
+writes on every drain; its single-line contents are the absolute path to the executor's own
+**clone**'s main checkout. It makes
 the executor **self-locating** — it *publishes* where it is, so any read-only observer (`/dashboard`
 today, #63 multi-clone tooling later) locates the live clone instead of guessing a convention path.
 Lives *outside* the clone by necessity: an observer that does not yet know where the clone is cannot
