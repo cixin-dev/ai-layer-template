@@ -96,7 +96,7 @@ to one pass of the PIV Loop. Issues are the bridge across the two phases: Phase 
 them, Phase 2 consumes them one at a time. The implementer agent's intake source is a
 **GitHub Issue** — the unit is named for what it natively is, not for a tracker-independent
 abstraction (ADR-0008 reverses the earlier "Ticket" framing: tracker-independence is
-over-engineering for a solo, GitHub-bound project). Issues are produced by `to-issues` and
+over-engineering for a solo, GitHub-bound project). Issues are produced by `to-tickets` and
 live on GitHub; `/plan` consumes exactly one (by number or URL), with ordering and
 dependencies expressed as GitHub Issue links (`Blocked by #NN`). The "user story" inside an
 Issue is a field of its content, not another name for it. (Pre-GitHub, an Issue was drafted
