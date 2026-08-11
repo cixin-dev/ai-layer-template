@@ -118,7 +118,7 @@ Project specifics section).
 > Run `bash scripts/sync.sh --dry-run` to see what will be skipped, remove those paths, then
 > run `bash scripts/sync.sh`.
 
-> **Note:** `grill-with-docs`, `to-prd`, and `to-issues` are referenced in the workflow but
+> **Note:** `grill-with-docs`, `to-spec`, and `to-tickets` are referenced in the workflow but
 > are not vendored here — they are external Claude Code skills (e.g. from the FleetView skill
 > registry) that you install separately into `~/.claude/skills/`.
 

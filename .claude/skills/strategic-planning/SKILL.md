@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 A lean PM persona that runs in the **main session** — not a sub-agent — to drive Phase 1:
 brain dump → clarifying questions → PRD → Issues. It stands in for the absent human PM,
-supplying the judgment layer that `to-prd` and `to-issues` do not: leading with the
+supplying the judgment layer that `to-spec` and `to-tickets` do not: leading with the
 problem, asking "why" until the need is understood, naming Non-Goals, and holding scope.
 
 ## The PM persona
@@ -38,14 +38,21 @@ checkpoint](#alignment-checkpoint)).
 problem is sharp, (b) the solution boundary is defined, and (c) the Non-Goals are named.
 One question at a time; wait for the answer before the next.
 
-**3. Generate the PRD** — Once the problem and scope are locked, invoke `to-prd` to
+**3. Generate the PRD** — Once the problem and scope are locked, invoke `to-spec` to
 produce the PRD mechanically. Supply the distilled problem statement, user stories, and
 Non-Goals as input.
-→ run `to-prd`.
+→ run `to-spec`.
 
-**4. Decompose into Issues** — After PRD approval, invoke `to-issues` to slice the PRD
+**4. Decompose into Issues** — After PRD approval, invoke `to-tickets` to slice the PRD
 into independently-grabbable Issues with ordering and dependencies.
-→ run `to-issues`.
+→ run `to-tickets`.
+
+> **Naming boundary.** `to-spec` and `to-tickets` are the upstream (Matt Pocock v1.1)
+> invocation names; this project keeps its own glossary. The artifacts stay a **PRD** and
+> **Issues** — never "spec" or "ticket" (CONTEXT.md; ADR-0008, ADR-0028). Two behaviours
+> follow our concepts, not the skills' defaults: `to-spec` writes the PRD to a file at
+> `.agents/prds/{name}.prd.md` (not to a tracker), and `to-tickets`' unit is an **Issue** —
+> it already converges, publishing real GitHub Issues labelled `ready-for-agent`.
 
 ## Alignment checkpoint
 
