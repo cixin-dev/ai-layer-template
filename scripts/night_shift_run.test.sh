@@ -94,6 +94,8 @@ export NIGHT_SHIFT_GH="$BIN/gh"
 # gather_snapshot advances the decider — proving the executor carries no loop logic.
 cat > "$BIN/claude" << 'EOF'
 #!/usr/bin/env bash
+# `--version` answers the spawner floor check (FAKE_CLAUDE_VERSION, default 2.1.269).
+if [ "${1:-}" = "--version" ]; then echo "${FAKE_CLAUDE_VERSION:-2.1.269} (Claude Code)"; exit 0; fi
 # claude_run invokes `claude -p "<slash command>"`, so the command is $2.
 cmd="$2"
 [ -n "${CLAUDE_LOG:-}" ] && echo "claude cwd=$PWD args=$cmd" >> "$CLAUDE_LOG"
@@ -496,6 +498,63 @@ OUT_CF2="$(NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$STATE_CF" \
               bash "$RUN" run 61 2>&1)"
 assert_contains "$OUT_CF2" "done: #61" "(C-fail) second run → done (noop)"
 assert_eq "$(cat "$NLOG_CF" | grep -c 'notify')" "1" "(C-fail) no second notify on re-run"
+
+# =============================================================================
+# Slice V — spawner version floor: the binary the SCRIPT resolves, not the shell's alias
+# =============================================================================
+# The default `claude` resolved through PATH to a root-owned npm-global 1.0.8 while
+# the operator's ~/.bashrc alias ran 2.1.269 — aliases are invisible to scripts and
+# cron (retroactive: claude-path-floor).
+
+# (V1) known-good: check-claude prints "<path> <version> (floor <min>)", rc 0.
+RC=0; out="$(bash "$RUN" check-claude 2>&1)" || RC=$?
+assert_eq "$RC" 0 "(V1) check-claude rc 0 at the default floor"
+assert_contains "$out" "$BIN/claude 2.1.269" "(V1) names the resolved path and version"
+assert_contains "$out" "floor 2.1.83" "(V1) names the floor"
+
+# (V2) known-bad: a stale spawner is refused BEFORE any phase is spawned — rc exactly 5
+# (126/127 would mean the script itself never ran: a forged flip).
+R="$(mktemp -d "$WORK/disp-stale.XXXXXX")"
+ST="$WORK/state-v2"; CLOG="$WORK/clog-v2"; : > "$CLOG"
+RC=0; err="$(FAKE_CLAUDE_VERSION=1.0.8 NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST" CLAUDE_LOG="$CLOG" \
+  bash "$RUN" dispatch run-plan 61 2>&1)" || RC=$?
+assert_eq "$RC" 5 "(V2) stale spawner exits 5"
+assert_contains "$err" "$BIN/claude" "(V2) names the resolved path"
+assert_contains "$err" "1.0.8"       "(V2) names the observed version"
+assert_contains "$err" "2.1.83"      "(V2) names the floor"
+assert_contains "$err" "NIGHT_SHIFT_CLAUDE" "(V2) names the remedy"
+assert_not_contains "$(cat "$CLOG")" "args=/plan" "(V2) no phase spawned on a stale spawner"
+
+# (V3) the floor is a parameter, not a hardcode: lowering it admits the same binary.
+RC=0; FAKE_CLAUDE_VERSION=1.0.8 NIGHT_SHIFT_CLAUDE_MIN=1.0.0 bash "$RUN" check-claude >/dev/null 2>&1 || RC=$?
+assert_eq "$RC" 0 "(V3) NIGHT_SHIFT_CLAUDE_MIN=1.0.0 admits 1.0.8"
+
+# (V4) a spawner that cannot run at all → rc 5, names it.
+RC=0; err="$(NIGHT_SHIFT_CLAUDE="$WORK/no-such-claude" bash "$RUN" check-claude 2>&1)" || RC=$?
+assert_eq "$RC" 5 "(V4) unrunnable spawner exits 5"
+assert_contains "$err" "$WORK/no-such-claude" "(V4) names the unrunnable path"
+
+# (V4b) present but broken (no --version, exits 3) on the DISPATCH path → rc 5 with the
+# message, not a silent errexit/pipefail abort with the binary's rc 3. (check-claude runs
+# the probe inside a command substitution, where errexit is not inherited, so it cannot
+# tell the two apart — dispatch calls the probe in the main shell and can.)
+printf '#!/usr/bin/env bash\nexit 3\n' > "$WORK/broken-claude"; chmod +x "$WORK/broken-claude"
+R="$(mktemp -d "$WORK/disp-broken.XXXXXX")"; ST="$WORK/state-v4b"
+RC=0; err="$(NIGHT_SHIFT_CLAUDE="$WORK/broken-claude" NIGHT_SHIFT_ROOT="$R" NIGHT_SHIFT_STATE_DIR="$ST" \
+  bash "$RUN" dispatch run-plan 61 2>&1)" || RC=$?
+assert_eq "$RC" 5 "(V4b) broken spawner exits 5 on dispatch (not 3: the script refused, the binary did not abort it)"
+assert_contains "$err" "unrunnable" "(V4b) names the binary as unrunnable"
+
+# (V5) default resolution prefers ~/.claude/local/claude over PATH …
+H="$WORK/home-v5"; mkdir -p "$H/.claude/local"; cp "$BIN/claude" "$H/.claude/local/claude"
+RC=0; out="$(env -u NIGHT_SHIFT_CLAUDE HOME="$H" PATH="$BIN:$PATH" bash "$RUN" check-claude 2>&1)" || RC=$?
+assert_eq "$RC" 0 "(V5) default resolution rc 0"
+assert_contains "$out" "$H/.claude/local/claude 2.1.269" "(V5) default prefers the local install over PATH"
+
+# (V6) … and falls back to PATH when there is no local install.
+RC=0; out="$(env -u NIGHT_SHIFT_CLAUDE HOME="$WORK/home-empty" PATH="$BIN:$PATH" bash "$RUN" check-claude 2>&1)" || RC=$?
+assert_eq "$RC" 0 "(V6) PATH fallback rc 0"
+assert_contains "$out" "$BIN/claude 2.1.269" "(V6) falls back to the PATH claude"
 
 # --- summary -----------------------------------------------------------------
 if [ "$FAILURES" -eq 0 ]; then

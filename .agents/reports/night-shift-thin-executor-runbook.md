@@ -24,8 +24,17 @@ Notation: `NS_CLONE` = the dedicated clone's main checkout; `FEAT_WT` = this fea
 # (a) No API key may shadow the claude.ai subscription (ADR-0024).
 env | grep -i anthropic            # expect EMPTY. If set, unset + remove from ~/.bashrc.
 
-# (b) Subscription auth actually works headless.
-claude -p "reply with the single token SUBOK" < /dev/null   # expect: SUBOK, exit 0
+# (b0) The spawner the SCRIPT will exec clears the version floor — resolved the way
+#      night_shift_run.sh resolves it, never via your shell alias (aliases are invisible to
+#      scripts and cron; bare `claude` on this host is a root-owned npm-global 1.0.8).
+bash scripts/night_shift_run.sh check-claude      # expect: <path> 2.1.x (floor 2.1.83), exit 0
+# → observed: /home/dylan/.claude/local/claude 2.1.269 (floor 2.1.83), rc 0  ✓
+# known-bad (the pre-fix default — bare PATH `claude`):
+NIGHT_SHIFT_CLAUDE=claude bash scripts/night_shift_run.sh check-claude
+# → observed: night_shift_run.sh: claude at /usr/local/bin/claude is 1.0.8, below floor 2.1.83 — …, rc 5  ✓
+
+# (b) Subscription auth actually works headless — through the path (b0) printed, never bare `claude`.
+~/.claude/local/claude -p "reply with the single token SUBOK" < /dev/null   # expect: SUBOK, exit 0
 
 # (c) Graduated push posture (#59): Bash(git push *) = allow in the USER-scope dial.
 #     (Project/local-scope defaultMode:auto is ignored — spike-autonomy-probes-report.md.)
@@ -70,7 +79,7 @@ trusting the full drive.
 
 ```bash
 cd "$NS_CLONE"
-claude -p "/plan $N" < /dev/null      # add `env -u ANTHROPIC_API_KEY` only if (1a) found a key
+~/.claude/local/claude -p "/plan $N" < /dev/null   # the (b0) path, never bare `claude`; add `env -u ANTHROPIC_API_KEY` only if (1a) found a key
 ```
 **GO if:** runs with no permission stall, exits 0, and writes `.agents/plans/<slug>.plan.md`
 in `$NS_CLONE`. **If it stalls on a permission prompt:** turn on the user-scope auto posture

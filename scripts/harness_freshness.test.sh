@@ -54,7 +54,7 @@ run() {
   RC=0
   OUT="$(printf '{"hook_event_name":"SessionStart"}' \
     | CLAUDE_HOME="$CLAUDE_HOME_DIR" HARNESS_FRESHNESS_FETCH_MINUTES="$FETCH_MINUTES" \
-      bash "$HOOK" "$@" 2>&1)" || RC=$?
+      PATH="${HOOK_PATH:-$PATH}" bash "$HOOK" "$@" 2>&1)" || RC=$?
 }
 
 setup_fixture() {
@@ -178,6 +178,28 @@ rm "$CLAUDE_HOME_DIR/hooks/h.py"
 run --strict
 assert_rc "$RC" 1 "test(9): missing hook copy --strict exits 1"
 assert_contains "$OUT" "hook copy missing: $CLAUDE_HOME_DIR/hooks/h.py" "test(9): names the missing copy"
+
+# --- (12) PATH `claude` is not the local install: scripts and cron get the PATH one ---
+# A ~/.bashrc alias hid a root-owned npm-global 1.0.8 on PATH behind
+# ~/.claude/local/claude 2.1.269; night_shift_run.sh (bare `claude`) resolved 1.0.8.
+setup_fixture
+mkdir -p "$CLAUDE_HOME_DIR/local" "$TMPDIR_ROOT/stalebin"
+printf '#!/usr/bin/env bash\necho "2.1.269 (Claude Code)"\n' > "$CLAUDE_HOME_DIR/local/claude"
+printf '#!/usr/bin/env bash\necho "1.0.8 (Claude Code)"\n'   > "$TMPDIR_ROOT/stalebin/claude"
+chmod +x "$CLAUDE_HOME_DIR/local/claude" "$TMPDIR_ROOT/stalebin/claude"
+HOOK_PATH="$TMPDIR_ROOT/stalebin:$PATH"
+run --strict
+assert_rc "$RC" 1 "test(12): stale PATH claude --strict exits 1"
+assert_contains "$OUT" "PATH claude is $TMPDIR_ROOT/stalebin/claude (1.0.8)" "test(12): names the PATH binary and its version"
+assert_contains "$OUT" "$CLAUDE_HOME_DIR/local/claude (2.1.269)" "test(12): names the local install and its version"
+
+# --- (13) PATH claude IS the local install (a symlink to it) → no finding ---
+mkdir -p "$TMPDIR_ROOT/goodbin"
+ln -sf "$CLAUDE_HOME_DIR/local/claude" "$TMPDIR_ROOT/goodbin/claude"
+HOOK_PATH="$TMPDIR_ROOT/goodbin:$PATH"
+run --strict
+assert_rc "$RC" 0 "test(13): PATH claude linked to the local install is fresh"
+unset HOOK_PATH
 
 # --- (10) empty user scope (fresh machine): nothing to check → rc 0 ---
 rm -rf "$CLAUDE_HOME_DIR"
