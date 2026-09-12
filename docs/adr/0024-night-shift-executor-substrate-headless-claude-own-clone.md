@@ -65,6 +65,14 @@ executor needs no per-call `env -u` scrubbing.
   `defaultMode:auto` is *ignored* — only user-scope settings or `--permission-mode` grant auto
   (`spike-autonomy-probes-report.md`). The deterministic dangerous-push floor (`security_guard.py`,
   ADR-0020) stays enforced independently of this graduation.
+- **Spawner resolution (retroactive `claude-path-floor`, 2026-09-13).** The executor resolves
+  `claude` the way a *script* does — `NIGHT_SHIFT_CLAUDE`, else `~/.claude/local/claude`, else
+  PATH — and refuses to spawn (rc 5) below `NIGHT_SHIFT_CLAUDE_MIN` (default 2.1.83, the spike's
+  Probe B floor). A `~/.bashrc` alias is invisible to scripts and cron: on the operator host bare
+  `claude` was a root-owned npm-global 1.0.8 while the alias ran 2.1.269, and §1's "headless
+  `claude -p` works" had been verified in the interactive shell — a different context from the
+  executor's. `check-claude` is the operator check in the script's own context;
+  `harness_freshness.sh` (e) names a PATH/local-install mismatch at every session start.
 
 ## Why this over the alternatives
 

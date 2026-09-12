@@ -12,7 +12,7 @@ copies that drift.
 | Project-agnostic machinery (commands + skills) | This repo; commands + skills symlinked to `~/.claude/` via `sync.sh` | This repo |
 | Project-specific context (`CONTEXT.md`, `docs/adr/`, `CLAUDE.md` "Project specifics", `.agents/`) | Each downstream repo, versioned with its code | That repo |
 
-`CLAUDE.md` and `examples/` are not synced — copy them into each downstream repo manually. Because `sync.sh` creates symlinks (not copies), edits to already-linked skills and commands are visible in `~/.claude/` instantly; re-run `sync.sh` only to pick up new or renamed items. You don't have to remember when: a `SessionStart` hook (`harness_freshness.sh`, ADR-0029) warns in every session when a source checkout is behind its upstream, off its default branch or dirty, a link dangles, or a hook copy is stale.
+`CLAUDE.md` and `examples/` are not synced — copy them into each downstream repo manually. Because `sync.sh` creates symlinks (not copies), edits to already-linked skills and commands are visible in `~/.claude/` instantly; re-run `sync.sh` only to pick up new or renamed items. You don't have to remember when: a `SessionStart` hook (`harness_freshness.sh`, ADR-0029) warns in every session when a source checkout is behind its upstream, off its default branch or dirty, a link dangles, a hook copy is stale, or the `claude` on PATH is not the local install your shell alias runs (scripts and cron get the PATH one).
 
 > **Note:** This repo self-applies this pattern — its own `CONTEXT.md`, `docs/adr/`, and `.agents/` are the machinery's project-specific context, versioned alongside the machinery itself.
 
@@ -119,7 +119,8 @@ Project specifics section).
 The **freshness check** (`harness_freshness.sh`) is a `SessionStart` hook that resolves the
 symlinks in `~/.claude/{commands,skills}` to their source checkouts and prints one line per
 finding — behind upstream (fetches at most once a day, fails open offline), off the default
-branch or dirty, a dangling link, a hook copy that differs from its source. Silent when fresh;
+branch or dirty, a dangling link, a hook copy that differs from its source, a PATH `claude` that
+is not `~/.claude/local/claude`. Silent when fresh;
 never blocks a session. `bash .claude/hooks/harness_freshness.sh --strict` reproduces it by hand
 with exit 1 on any finding (ADR-0029).
 

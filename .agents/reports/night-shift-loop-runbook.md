@@ -22,7 +22,7 @@ task at a time), with a file + signal kill switch.
 Reuse the executor runbook §1 in full — all four preconditions apply:
 
 1. No `ANTHROPIC_API_KEY` shadowing the subscription.
-2. Headless `claude -p` works (subscription auth).
+2. The spawner the *script* resolves clears the floor (`check-claude`), and headless `-p` works (subscription auth).
 3. `git push` dial graduated to `allow` by the **operator** by hand (agent can't self-modify).
 4. Dedicated clone on `main` (`NS_CLONE=~/night-shift/ai-layer-template`).
 

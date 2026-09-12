@@ -15,6 +15,8 @@
 #   (d) <repo>/.claude/hooks/* missing from, or differing to, ~/.claude/hooks/*
 # Over ~/.claude/{commands,skills} themselves:
 #   (c) dangling symlinks
+# Over the `claude` binary scripts and cron will exec (never the shell's alias):
+#   (e) PATH `claude` is not ~/.claude/local/claude while that local install exists
 #
 # Hook mode (default): one line per finding on stdout (lands in context), silent
 # when green (no alarm fatigue), ALWAYS exit 0 — never block a session start.
@@ -33,7 +35,7 @@ set -uo pipefail
 STRICT=0
 case "${1:-}" in
   --strict) STRICT=1 ;;
-  -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "") ;;
   *) echo "error: unknown option: $1" >&2; exit 2 ;;
 esac
@@ -133,6 +135,27 @@ check_hook_copies() {
   done
 }
 
+# --- (e) PATH `claude` is not the local install ---
+# A ~/.bashrc alias hides a stale PATH binary from the operator's shell; scripts and
+# cron never see aliases (night_shift_run.sh resolved a root-owned npm-global 1.0.8
+# while the session ran ~/.claude/local/claude 2.1.269 — retroactive: claude-path-floor).
+_claude_ver() {  # path → first token of `--version`, or "?"
+  local v
+  if command -v timeout >/dev/null 2>&1; then
+    v="$(timeout 5 "$1" --version 2>/dev/null | awk 'NR==1{print $1}')"
+  else
+    v="$("$1" --version 2>/dev/null | awk 'NR==1{print $1}')"
+  fi
+  printf '%s' "${v:-?}"
+}
+check_path_claude() {
+  local local_bin="$CLAUDE_DIR/local/claude" path_bin
+  [ -x "$local_bin" ] || return 0
+  path_bin="$(command -v claude 2>/dev/null)" || return 0
+  [ "$(readlink -f "$path_bin")" = "$(readlink -f "$local_bin")" ] && return 0
+  finding "PATH claude is $path_bin ($(_claude_ver "$path_bin")), not $local_bin ($(_claude_ver "$local_bin")) — scripts and cron get the PATH one; remove it or put $CLAUDE_DIR/local first on PATH"
+}
+
 repo_count=0
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
@@ -143,6 +166,7 @@ while IFS= read -r repo; do
 done <<EOF
 $repos
 EOF
+check_path_claude
 
 if [ "$FINDINGS" -gt 0 ]; then
   echo "[harness-freshness] $FINDINGS finding(s) — reproduce: bash $0 --strict"

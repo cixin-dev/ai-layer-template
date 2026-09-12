@@ -19,7 +19,8 @@
 #   night_shift_run.sh dispatch <decision> <N> # perform one decision's action
 #
 # Externals are dependency-injected (so the seams test offline):
-#   NIGHT_SHIFT_CLAUDE  (default: claude)   phase-session spawner
+#   NIGHT_SHIFT_CLAUDE  (default: ~/.claude/local/claude if present, else claude)  phase-session spawner
+#   NIGHT_SHIFT_CLAUDE_MIN (default: 2.1.83)  spawner version floor (spike Probe B prerequisite)
 #   NIGHT_SHIFT_GH      (default: gh)       Issue labels / PR state / claim
 #   NIGHT_SHIFT_ROOT    (default: repo root) the clone's main checkout
 #   NIGHT_SHIFT_STATE_DIR (default: $ROOT/.night-shift)  loop_state store
@@ -30,7 +31,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-CLAUDE="${NIGHT_SHIFT_CLAUDE:-claude}"
+# The spawner the SCRIPT resolves, never the shell's alias: a ~/.bashrc alias hid a
+# root-owned npm-global 1.0.8 on PATH behind ~/.claude/local/claude 2.1.269, and
+# aliases are invisible to scripts and cron. Prefer the local install, then assert
+# the floor before every spawn (retroactive: claude-path-floor).
+if [ -n "${NIGHT_SHIFT_CLAUDE:-}" ]; then CLAUDE="$NIGHT_SHIFT_CLAUDE"
+elif [ -x "${HOME:-}/.claude/local/claude" ]; then CLAUDE="$HOME/.claude/local/claude"
+else CLAUDE="claude"; fi
+CLAUDE_MIN="${NIGHT_SHIFT_CLAUDE_MIN:-2.1.83}"
 GH="${NIGHT_SHIFT_GH:-gh}"
 NOTIFY="${NIGHT_SHIFT_NOTIFY:-$SCRIPT_DIR/../.claude/hooks/notify.sh}"
 ROOT="${NIGHT_SHIFT_ROOT:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)}"
@@ -130,11 +138,28 @@ gather_snapshot() {  # N → KEY=value lines
   printf 'ATTEMPTS=%s\n'       "$attempts"
 }
 
+# --- spawner floor: refuse a stale/unrunnable binary BEFORE any phase spawns (rc 5) ---
+_claude_path_ver() {  # → "<path> <version>" on stdout, or exit 5
+  local path ver remedy="export NIGHT_SHIFT_CLAUDE=<path to claude >= $CLAUDE_MIN>"
+  path="$(command -v "$CLAUDE" 2>/dev/null)" \
+    || { echo "night_shift_run.sh: spawner '$CLAUDE' not found — $remedy" >&2; exit 5; }
+  ver="$("$path" --version 2>/dev/null | awk 'NR==1{print $1}' || true)"  # pipefail-safe: a broken binary lands below
+  if [ -z "$ver" ] || [ "$(printf '%s\n%s\n' "$CLAUDE_MIN" "$ver" | sort -V | head -1)" != "$CLAUDE_MIN" ]; then
+    echo "night_shift_run.sh: claude at $path is ${ver:-unrunnable}, below floor $CLAUDE_MIN — scripts and cron resolve PATH, not your shell alias; $remedy" >&2
+    exit 5
+  fi
+  printf '%s %s\n' "$path" "$ver"
+}
+check_claude() {  # operator check: what the script will exec, and whether it clears the floor
+  local pv; pv="$(_claude_path_ver)" || exit $?
+  printf '%s (floor %s)\n' "$pv" "$CLAUDE_MIN"
+}
 # --- dispatch: perform exactly the action the decider chose ------------------
 # Blocking. The return of each phase IS the phase-complete event. Each phase runs
 # in a fresh `claude -p` session (stdin /dev/null avoids the interactive wait).
 # The executor adds NO push/PR/notify of its own — /validate Phase 5 owns those.
 claude_run() {  # dir cmd
+  _claude_path_ver >/dev/null
   ( cd "$1" && "$CLAUDE" -p "$2" < /dev/null )
 }
 
@@ -269,7 +294,7 @@ run() {
 }
 
 usage() {
-  echo "usage: $(basename "$0") <issue-number>|run <N>|snapshot <N>|resolve-slug <N>|dispatch <decision> <N>" >&2
+  echo "usage: $(basename "$0") <issue-number>|run <N>|snapshot <N>|resolve-slug <N>|dispatch <decision> <N>|check-claude" >&2
 }
 
 # --- subcommand entry --------------------------------------------------------
@@ -280,6 +305,7 @@ main() {
     snapshot)     gather_snapshot "${2:?usage: snapshot <N>}" ;;
     dispatch)     dispatch "${2:?usage: dispatch <decision> <N>}" "${3:?usage: dispatch <decision> <N>}" ;;
     run)          run "${2:?usage: run <N>}" ;;
+    check-claude) check_claude ;;
     ''|-h|--help) usage ;;
     *)
       if printf '%s' "$cmd" | grep -qE '^[0-9]+$'; then
