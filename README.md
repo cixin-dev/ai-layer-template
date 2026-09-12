@@ -12,7 +12,7 @@ copies that drift.
 | Project-agnostic machinery (commands + skills) | This repo; commands + skills symlinked to `~/.claude/` via `sync.sh` | This repo |
 | Project-specific context (`CONTEXT.md`, `docs/adr/`, `CLAUDE.md` "Project specifics", `.agents/`) | Each downstream repo, versioned with its code | That repo |
 
-`CLAUDE.md` and `examples/` are not synced — copy them into each downstream repo manually. Because `sync.sh` creates symlinks (not copies), edits to already-linked skills and commands are visible in `~/.claude/` instantly; re-run `sync.sh` only to pick up new or renamed items.
+`CLAUDE.md` and `examples/` are not synced — copy them into each downstream repo manually. Because `sync.sh` creates symlinks (not copies), edits to already-linked skills and commands are visible in `~/.claude/` instantly; re-run `sync.sh` only to pick up new or renamed items. You don't have to remember when: a `SessionStart` hook (`harness_freshness.sh`, ADR-0029) warns in every session when a source checkout is behind its upstream, off its default branch or dirty, a link dangles, or a hook copy is stale.
 
 > **Note:** This repo self-applies this pattern — its own `CONTEXT.md`, `docs/adr/`, and `.agents/` are the machinery's project-specific context, versioned alongside the machinery itself.
 
@@ -51,7 +51,8 @@ ai-layer-template/
 │   │   └── retroactive.md          # System Evolution: improve the AI Layer
 │   ├── hooks/
 │   │   ├── validate_gate.py        # Stop hook: blocks session end on red gate
-│   │   └── security_guard.py       # PreToolUse hook: deny .env reads + rm -rf
+│   │   ├── security_guard.py       # PreToolUse hook: deny .env reads + rm -rf
+│   │   └── harness_freshness.sh    # SessionStart hook: warns when user scope is stale
 │   ├── validate.sh                 # this repo's gate script (project-specific,
 │   │                               #   not synced); each project writes its own
 │   └── skills/
@@ -70,7 +71,8 @@ ai-layer-template/
 │   ├── sync.sh                     # symlink machinery + wire hooks into ~/.claude/
 │   ├── sync.test.sh
 │   ├── unsync.sh                   # inverse of sync.sh — clean teardown
-│   └── unsync.test.sh
+│   ├── unsync.test.sh
+│   └── harness_freshness.test.sh   # known-good / known-bad seam for the freshness hook
 └── README.md
 ```
 
@@ -87,7 +89,7 @@ bash scripts/sync.sh
 ```
 
 `sync.sh` symlinks each owned skill, command, and hook into `~/.claude/{skills,commands,hooks}/`
-and **additively wires the two hook entries into `~/.claude/settings.json`** (writes a `.bak`
+and **additively wires the three hook entries into `~/.claude/settings.json`** (writes a `.bak`
 first; idempotent; never removes your existing keys; falls back to printing a manual snippet
 if `python3` is missing or the file is unparseable). Run once after cloning; re-run after
 pulling updates to pick up new or renamed items. Real files at a target path are warned and
@@ -105,7 +107,7 @@ bash scripts/unsync.sh
 
 `unsync.sh` is the exact inverse of `sync.sh`: it removes only the symlinks pointing into this
 repo, removes the copied hook files, and either restores `~/.claude/settings.json` from its
-`.bak` backup or surgically removes the two hook entries. User files, real directories, and
+`.bak` backup or surgically removes the three hook entries. User files, real directories, and
 upstream symlinks are never touched. Safe to run repeatedly — idempotent.
 
 The **validate gate** (`validate_gate.py`) is a `Stop` hook that runs your project's
@@ -113,6 +115,13 @@ The **validate gate** (`validate_gate.py`) is a `Stop` hook that runs your proje
 `.claude/validate.sh` is absent, so it is harmless in any project that hasn't opted in. Each
 project writes its own `.claude/validate.sh` (not synced — project-specific, like `CLAUDE.md`'s
 Project specifics section).
+
+The **freshness check** (`harness_freshness.sh`) is a `SessionStart` hook that resolves the
+symlinks in `~/.claude/{commands,skills}` to their source checkouts and prints one line per
+finding — behind upstream (fetches at most once a day, fails open offline), off the default
+branch or dirty, a dangling link, a hook copy that differs from its source. Silent when fresh;
+never blocks a session. `bash .claude/hooks/harness_freshness.sh --strict` reproduces it by hand
+with exit 1 on any finding (ADR-0029).
 
 > **Migrating from `install.sh`?** The old installer left real file copies in `~/.claude/`.
 > Run `bash scripts/sync.sh --dry-run` to see what will be skipped, remove those paths, then

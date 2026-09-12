@@ -4,7 +4,7 @@ set -euo pipefail
 # Symlink each owned skill/command into ~/.claude/{skills,commands}/; copy hooks
 # into ~/.claude/hooks/ as real files (so they survive an unmounted NFS share).
 # Owned items are discovered dynamically from this repo's .claude/ tree.
-# Also additively wires the two hook entries into ~/.claude/settings.json
+# Also additively wires the three hook entries into ~/.claude/settings.json
 # (backs up the file first; idempotent; never removes user keys).
 #
 # Usage:
@@ -140,6 +140,7 @@ fi
 SETTINGS="$CLAUDE_DIR/settings.json"
 SG_CMD="python3 \"$CLAUDE_DIR/hooks/security_guard.py\""
 VG_CMD="python3 \"$CLAUDE_DIR/hooks/validate_gate.py\""
+HF_CMD="bash \"$CLAUDE_DIR/hooks/harness_freshness.sh\""
 # The versioned unattended-autonomy posture, additively merged into live settings.
 SHARED_SETTINGS="$REPO_DIR/.claude/settings.shared.json"
 
@@ -147,17 +148,19 @@ if ! command -v python3 >/dev/null 2>&1; then
   if [ "$DRY_RUN" -eq 1 ]; then
     note "would wire hook: PreToolUse -> security_guard.py"
     note "would wire hook: Stop -> validate_gate.py"
+    note "would wire hook: SessionStart -> harness_freshness.sh"
     note "would set defaultMode: auto"
     note "would add ask: Bash(git push *)"
   else
     note "warn: python3 not found — wire hooks manually by adding to $SETTINGS:"
     note "  PreToolUse: $SG_CMD"
     note "  Stop: $VG_CMD"
+    note "  SessionStart: $HF_CMD"
     note "  permissions.defaultMode: auto"
     note "  permissions.ask: Bash(git push *)"
   fi
 else
-  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$SHARED_SETTINGS" <<'PYEOF'
+  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$SHARED_SETTINGS" "$HF_CMD" <<'PYEOF'
 import json, sys, shutil, pathlib
 
 settings_path = pathlib.Path(sys.argv[1])
@@ -165,6 +168,7 @@ sg_cmd = sys.argv[2]
 vg_cmd = sys.argv[3]
 dry_run = sys.argv[4] == "1"
 shared_path = pathlib.Path(sys.argv[5])
+hf_cmd = sys.argv[6]
 
 try:
     data = json.loads(settings_path.read_text()) if settings_path.exists() else {}
@@ -173,10 +177,12 @@ except Exception as e:
         print(f"[sync] warn: could not read {settings_path} — assuming hooks not wired", flush=True)
         print(f"[sync] would wire hook: PreToolUse -> security_guard.py", flush=True)
         print(f"[sync] would wire hook: Stop -> validate_gate.py", flush=True)
+        print(f"[sync] would wire hook: SessionStart -> harness_freshness.sh", flush=True)
     else:
         print(f"[sync] warn: could not parse {settings_path}: {e} — wire hooks manually", flush=True)
         print(f"[sync]   PreToolUse: {sg_cmd}", flush=True)
         print(f"[sync]   Stop: {vg_cmd}", flush=True)
+        print(f"[sync]   SessionStart: {hf_cmd}", flush=True)
     sys.exit(0)
 
 # The versioned posture file is repo-controlled; an absent file means "no posture".
@@ -205,6 +211,18 @@ needs_stop = not any(
         or b.get("command") == vg_cmd
     )
     for b in stop_list
+)
+
+# SessionStart freshness check (ADR-0029). Gets its OWN block rather than being
+# appended to a foreign one (e.g. herdr's), which that tool's installer may rewrite.
+hf_entry = {"type": "command", "command": hf_cmd, "timeout": 20}
+start_list = hooks.get("SessionStart", [])
+needs_start = not any(
+    isinstance(b, dict) and (
+        any(h.get("command") == hf_cmd for h in b.get("hooks", []) if isinstance(h, dict))
+        or b.get("command") == hf_cmd
+    )
+    for b in start_list
 )
 
 # --- Unattended-autonomy posture deltas (from settings.shared.json) ---
@@ -246,6 +264,8 @@ if dry_run:
         print(f"[sync] would wire hook: PreToolUse -> security_guard.py", flush=True)
     if needs_stop:
         print(f"[sync] would wire hook: Stop -> validate_gate.py", flush=True)
+    if needs_start:
+        print(f"[sync] would wire hook: SessionStart -> harness_freshness.sh", flush=True)
     if set_default:
         print(f"[sync] would set defaultMode: {shared_default}", flush=True)
     for a in ask_to_add:
@@ -268,6 +288,9 @@ else:
     if needs_stop:
         hooks_section = data.setdefault("hooks", {})
         hooks_section.setdefault("Stop", []).append({"hooks": [vg_entry]})
+    if needs_start:
+        hooks_section = data.setdefault("hooks", {})
+        hooks_section.setdefault("SessionStart", []).append({"matcher": "*", "hooks": [hf_entry]})
     if needs_posture:
         perms = data.setdefault("permissions", {})
         if set_default:
@@ -279,7 +302,7 @@ else:
         if notifs_to_add:
             data.setdefault("hooks", {}).setdefault("Notification", []).extend(notifs_to_add)
 
-    if needs_pre or needs_stop or needs_posture:
+    if needs_pre or needs_stop or needs_start or needs_posture:
         bak_path = pathlib.Path(str(settings_path) + ".bak")
         if settings_path.exists() and not bak_path.exists():
             shutil.copy2(settings_path, bak_path)
@@ -288,6 +311,8 @@ else:
             print(f"[sync] wired hook: PreToolUse -> security_guard.py", flush=True)
         if needs_stop:
             print(f"[sync] wired hook: Stop -> validate_gate.py", flush=True)
+        if needs_start:
+            print(f"[sync] wired hook: SessionStart -> harness_freshness.sh", flush=True)
         if set_default:
             print(f"[sync] set defaultMode: {shared_default}", flush=True)
         for a in ask_to_add:

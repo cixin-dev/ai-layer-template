@@ -81,6 +81,7 @@ setup_fixture() {
   mkdir -p "$REPO/.claude/hooks"
   echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/validate_gate.py"
   echo '#!/usr/bin/env python3' > "$REPO/.claude/hooks/security_guard.py"
+  echo '#!/usr/bin/env bash' > "$REPO/.claude/hooks/harness_freshness.sh"
 
   # Claude home fixture: upstream symlinks that must never be touched
   mkdir -p "$CLAUDE_HOME_DIR/skills"
@@ -246,6 +247,20 @@ assert_file_exists "$CLAUDE_HOME_DIR/skills/grill-with-docs" "test(j): grill-wit
 assert_file_exists "$CLAUDE_HOME_DIR/skills/to-prd"          "test(j): to-prd untouched (cross-mount)"
 assert_file_exists "$CLAUDE_HOME_DIR/skills/grill-me"        "test(j): grill-me untouched (cross-mount)"
 assert_file_exists "$CLAUDE_HOME_DIR/skills/to-issues"       "test(j): to-issues untouched (cross-mount)"
+
+# --- Test (k): surgical SessionStart unwire (ADR-0029) — ours removed, foreign block kept ---
+setup_fixture
+mkdir -p "$CLAUDE_HOME_DIR"
+printf '%s\n' '{"hooks": {"SessionStart": [{"matcher": "*", "hooks": [{"type": "command", "command": "bash /elsewhere/foreign.sh session"}]}]}}' > "$CLAUDE_HOME_DIR/settings.json"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+rm -f "$CLAUDE_HOME_DIR/settings.json.bak"   # force the surgical path, not the .bak restore
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$UNSYNC_SH" --dry-run)"
+assert_contains "$output" "would unwire hook: SessionStart -> harness_freshness.sh" "test(k): dry-run plans SessionStart unwire"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$UNSYNC_SH" >/dev/null
+content="$(cat "$CLAUDE_HOME_DIR/settings.json")"
+assert_not_contains "$content" "harness_freshness.sh" "test(k): SessionStart entry removed"
+assert_contains "$content" "/elsewhere/foreign.sh"   "test(k): foreign SessionStart block preserved"
+assert_file_not_exists "$CLAUDE_HOME_DIR/hooks/harness_freshness.sh" "test(k): hook copy removed"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."
