@@ -1,5 +1,10 @@
 # Hooks are copied as real files, not symlinked, for NFS resilience
 
+**Status:** Accepted cost bounded by ADR-0029 — hook-copy drift is now surfaced at every
+session start by `harness_freshness.sh`. The premise below ("the practical drift window is
+narrow") was falsified on 2026-09-13: the copies had been stale since 2026-06-13, because
+nothing but operator memory triggered a `sync.sh` re-run.
+
 ADR-0007 accepted symlink fragility deliberately — if the NFS mount is gone, links break — but
 did not weigh the failure modes separately across item types. Issues #2 and #3 exposed that the
 trade-off resolves differently for hooks than for skills and commands.

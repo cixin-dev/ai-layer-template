@@ -80,6 +80,7 @@ setup_fixture() {
   mkdir -p "$REPO/.claude/hooks"
   touch "$REPO/.claude/hooks/validate_gate.py"
   touch "$REPO/.claude/hooks/security_guard.py"
+  touch "$REPO/.claude/hooks/harness_freshness.sh"
 
   # Unattended-autonomy posture file (the additive merge input — mirrors the real repo).
   cat > "$REPO/.claude/settings.shared.json" <<'JSON'
@@ -207,6 +208,11 @@ if [ "$vg_count" -ne 1 ]; then
 fi
 if [ "$sg_count" -ne 1 ]; then
   echo "FAIL: test(g): security_guard.py appears $sg_count times in settings.json (expected 1)"
+  FAILURES=$((FAILURES + 1))
+fi
+hf_count=$(grep -c "harness_freshness.sh" "$CLAUDE_HOME_DIR/settings.json" || true)
+if [ "$hf_count" -ne 1 ]; then
+  echo "FAIL: test(g): harness_freshness.sh appears $hf_count times in settings.json (expected 1)"
   FAILURES=$((FAILURES + 1))
 fi
 
@@ -396,6 +402,32 @@ PYEOF
 )"
 assert_contains "$posture" "PUSH_ON_ASK"        "test(shared-g): shipped posture keeps git push on ask"
 assert_not_contains "$posture" "PUSH_ON_ALLOW"  "test(shared-g): shipped posture must NOT pre-graduate git push to allow"
+
+# --- Test (o): SessionStart freshness hook (ADR-0029) — own block, foreign block untouched, idempotent ---
+# A foreign tool (e.g. herdr) may already own a SessionStart block that its installer
+# rewrites; ours must be a sibling block, never appended inside it.
+setup_fixture
+seed_live_settings '{"hooks": {"SessionStart": [{"matcher": "*", "hooks": [{"type": "command", "command": "bash /elsewhere/foreign.sh session", "timeout": 10}]}]}}'
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_contains "$output" "would wire hook: SessionStart -> harness_freshness.sh" "test(o): dry-run plans SessionStart wiring"
+SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" >/dev/null
+assert_file_exists "$CLAUDE_HOME_DIR/hooks/harness_freshness.sh" "test(o): hook copy installed"
+start_shape="$(python3 - "$CLAUDE_HOME_DIR/settings.json" <<'PYEOF'
+import json, sys
+d = json.loads(open(sys.argv[1]).read())
+blocks = d["hooks"]["SessionStart"]
+ours = [b for b in blocks if any("harness_freshness.sh" in h.get("command", "") for h in b.get("hooks", []))]
+foreign = [b for b in blocks if any("foreign.sh" in h.get("command", "") for h in b.get("hooks", []))]
+print("OWN_BLOCK" if len(ours) == 1 and len(foreign) == 1 and ours[0] is not foreign[0] else "SHARED_OR_MISSING")
+print("FOREIGN_INTACT" if len(foreign) == 1 and len(foreign[0]["hooks"]) == 1 else "FOREIGN_CHANGED")
+print("MATCHER_STAR" if ours and ours[0].get("matcher") == "*" else "MATCHER_OTHER")
+PYEOF
+)"
+assert_contains "$start_shape" "OWN_BLOCK"      "test(o): freshness hook wired in its own SessionStart block"
+assert_contains "$start_shape" "FOREIGN_INTACT" "test(o): foreign SessionStart block keeps exactly its own hook"
+assert_contains "$start_shape" "MATCHER_STAR"   "test(o): our block matches every SessionStart source"
+output="$(SYNC_REPO_DIR="$REPO" CLAUDE_HOME="$CLAUDE_HOME_DIR" bash "$SYNC_SH" --dry-run)"
+assert_not_contains "$output" "would wire hook: SessionStart" "test(o): idempotent — second dry-run plans no SessionStart wiring"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All tests passed."

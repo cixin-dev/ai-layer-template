@@ -140,6 +140,7 @@ fi
 SETTINGS="$CLAUDE_DIR/settings.json"
 SG_CMD="python3 \"$CLAUDE_DIR/hooks/security_guard.py\""
 VG_CMD="python3 \"$CLAUDE_DIR/hooks/validate_gate.py\""
+HF_CMD="bash \"$CLAUDE_DIR/hooks/harness_freshness.sh\""
 
 if [ -f "$SETTINGS.bak" ]; then
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -152,19 +153,22 @@ elif ! command -v python3 >/dev/null 2>&1; then
   if [ "$DRY_RUN" -eq 1 ]; then
     note "would unwire hook: PreToolUse -> security_guard.py"
     note "would unwire hook: Stop -> validate_gate.py"
+    note "would unwire hook: SessionStart -> harness_freshness.sh"
   else
     note "warn: python3 not found — remove hooks manually from $SETTINGS:"
     note "  remove PreToolUse entry: $SG_CMD"
     note "  remove Stop entry: $VG_CMD"
+    note "  remove SessionStart entry: $HF_CMD"
   fi
 else
-  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" <<'PYEOF'
+  python3 - "$SETTINGS" "$SG_CMD" "$VG_CMD" "$DRY_RUN" "$HF_CMD" <<'PYEOF'
 import json, sys, pathlib
 
 settings_path = pathlib.Path(sys.argv[1])
 sg_cmd = sys.argv[2]
 vg_cmd = sys.argv[3]
 dry_run = sys.argv[4] == "1"
+hf_cmd = sys.argv[5]
 
 if not settings_path.exists():
     sys.exit(0)
@@ -178,6 +182,7 @@ except Exception as e:
         print(f"[unsync] warn: could not parse {settings_path}: {e} — remove hooks manually", flush=True)
         print(f"[unsync]   remove PreToolUse entry: {sg_cmd}", flush=True)
         print(f"[unsync]   remove Stop entry: {vg_cmd}", flush=True)
+        print(f"[unsync]   remove SessionStart entry: {hf_cmd}", flush=True)
     sys.exit(0)
 
 hooks = data.get("hooks", {})
@@ -237,6 +242,26 @@ if "Stop" in hooks:
             hooks["Stop"] = new_stop
         else:
             del hooks["Stop"]
+
+# Remove harness_freshness.sh from SessionStart (foreign blocks, e.g. herdr's, stay)
+if "SessionStart" in hooks:
+    start_list = hooks["SessionStart"]
+    new_start = []
+    start_changed = False
+    for block in start_list:
+        drop = remove_cmd_from_block(block, hf_cmd)
+        if drop:
+            start_changed = True
+            if dry_run:
+                print(f"[unsync] would unwire hook: SessionStart -> harness_freshness.sh", flush=True)
+        else:
+            new_start.append(block)
+    if start_changed or len(new_start) < len(start_list):
+        changed = True
+        if new_start:
+            hooks["SessionStart"] = new_start
+        else:
+            del hooks["SessionStart"]
 
 # Drop hooks key if empty
 if "hooks" in data and not data["hooks"]:
