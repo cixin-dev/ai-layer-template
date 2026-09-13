@@ -37,10 +37,13 @@ Frame the session this way:
 **Dimension 0 — Is the defect mechanically checkable?** Ask first: can this be expressed as a
 lint rule, type check, test case, or grep assertion that returns green or red? If yes, add the
 check to `.claude/validate.sh` or the project test suite so the Stop hook (ADR-0009) catches it
-next time — reach for the deterministic gate before a prose rule. The check is primary but not
-exclusive: if it catches only *this instance* while the underlying *class* stays judgment-shaped,
-keep a prose dimension alongside it. Fall through to the prose dimensions below whenever a defect
-— or the residue a check can't express — needs design judgment or a human eye.
+next time — reach for the deterministic gate before a prose rule. Before shipping a gate,
+enumerate the states the Harness already declares expected (e.g. `implement.md`'s pre-flight
+table) and put each in its known-good fixture — a gate that fires on a by-design state is a
+line the operator learns to dismiss. The check is primary but not exclusive: if it catches only
+*this instance* while the underlying *class* stays judgment-shaped, keep a prose dimension
+alongside it. Fall through to the prose dimensions below whenever a defect — or the residue a
+check can't express — needs design judgment or a human eye.
 
 Check the four AI Layer prose dimensions, in order:
 

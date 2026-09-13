@@ -11,7 +11,8 @@
 #
 # Source repos are discovered by resolving the symlinks — never hardcoded. Per repo:
 #   (a) HEAD behind its upstream            — fetch at most once per FETCH_MINUTES; fail open
-#   (b) not on the default branch, or dirty — downstream sessions run unreviewed edits
+#   (b) not on the default branch, or dirty — downstream sessions run unreviewed edits;
+#       untracked .agents/plans/ drafts are exempt (the /implement pickup state, not an edit)
 #   (d) <repo>/.claude/hooks/* missing from, or differing to, ~/.claude/hooks/*
 # Over ~/.claude/{commands,skills} themselves:
 #   (c) dangling symlinks
@@ -118,7 +119,11 @@ check_branch_state() {
   if [ "$branch" != "$default" ]; then
     finding "$repo: on '${branch:-detached HEAD}', not '$default' — downstream sessions run unreviewed edits"
   fi
-  if [ -n "$(git -C "$repo" status --porcelain 2>/dev/null)" ]; then
+  # Untracked plan drafts are /implement's declared pickup state (implement.md pre-flight
+  # table), not an edit any downstream session runs — exempt exactly that path class
+  # (retroactive: freshness-dirty-plan-drafts). --untracked-files=all: without it a wholly
+  # untracked parent collapses to `?? .agents/` and the prefix never matches.
+  if [ -n "$(git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null | grep -v '^?? \.agents/plans/')" ]; then
     finding "$repo: working tree dirty — downstream sessions run unreviewed edits"
   fi
 }
