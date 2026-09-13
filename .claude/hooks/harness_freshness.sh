@@ -17,6 +17,9 @@
 #   (c) dangling symlinks
 # Over the `claude` binary scripts and cron will exec (never the shell's alias):
 #   (e) PATH `claude` is not ~/.claude/local/claude while that local install exists
+# Over every ~/.claude/{skills/*/SKILL.md,commands/*.md} (linked or real):
+#   (f) a `Call the Skill tool with "X"` step whose X is not in ~/.claude/skills, or is
+#       `disable-model-invocation: true` (the harness drops it from the model's listing)
 #
 # Hook mode (default): one line per finding on stdout (lands in context), silent
 # when green (no alarm fatigue), ALWAYS exit 0 — never block a session start.
@@ -156,6 +159,35 @@ check_path_claude() {
   finding "PATH claude is $path_bin ($(_claude_ver "$path_bin")), not $local_bin ($(_claude_ver "$local_bin")) — scripts and cron get the PATH one; remove it or put $CLAUDE_DIR/local first on PATH"
 }
 
+# --- (f) Skill-tool dependency closure ---
+# Hand-picked symlinks (ADR-0007) satisfy only the names the operator picked; a skill's
+# own `Call the Skill tool with "X"` step needs X linked too, and model-invoked: the
+# harness refuses a `disable-model-invocation: true` skill at the Skill tool ("Ask the
+# user to run /X themselves" — probed 2026-09-13), so no skill can reach one. grill-me /
+# grill-with-docs / triage sat broken on "grilling" / "domain-modeling" for months
+# (retroactive: skill-dep-closure). Plugin-namespaced names (`a:b`) are not user-scope
+# files and are skipped.
+_user_invoked() {  # SKILL.md → rc 0 when its frontmatter says disable-model-invocation: true
+  # awk must exit 0 on the closing fence: under pipefail its rc would become the function's.
+  awk 'NR==1 { if ($0 != "---") exit; next } /^---/ { exit } { print }' "$1" 2>/dev/null \
+    | grep -qE '^disable-model-invocation:[[:space:]]*true[[:space:]]*$'
+}
+check_skill_deps() {
+  local f dep target
+  for f in "$CLAUDE_DIR"/skills/*/SKILL.md "$CLAUDE_DIR"/commands/*.md; do
+    [ -f "$f" ] || continue
+    # shellcheck disable=SC2013  # names match [a-z0-9_-]+ — no whitespace to split on
+    for dep in $(grep -h 'Skill tool' "$f" 2>/dev/null | grep -oE '"[a-z0-9][a-z0-9_-]*"' | tr -d '"' | sort -u); do
+      target="$CLAUDE_DIR/skills/$dep/SKILL.md"
+      if [ ! -f "$target" ]; then
+        finding "skill dependency missing: $f calls the Skill tool with \"$dep\" but $CLAUDE_DIR/skills/$dep is not linked — link it from its source repo or the step cannot fire"
+      elif _user_invoked "$target"; then
+        finding "skill dependency unreachable: $f calls the Skill tool with \"$dep\" but it is disable-model-invocation: true — only the human can run it; rephrase the step as 'tell the user to run /$dep'"
+      fi
+    done
+  done
+}
+
 repo_count=0
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
@@ -167,6 +199,7 @@ done <<EOF
 $repos
 EOF
 check_path_claude
+check_skill_deps
 
 if [ "$FINDINGS" -gt 0 ]; then
   echo "[harness-freshness] $FINDINGS finding(s) — reproduce: bash $0 --strict"

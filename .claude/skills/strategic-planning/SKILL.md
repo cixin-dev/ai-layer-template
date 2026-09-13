@@ -38,14 +38,15 @@ checkpoint](#alignment-checkpoint)).
 problem is sharp, (b) the solution boundary is defined, and (c) the Non-Goals are named.
 One question at a time; wait for the answer before the next.
 
-**3. Generate the PRD** — Once the problem and scope are locked, invoke `to-spec` to
-produce the PRD mechanically. Supply the distilled problem statement, user stories, and
-Non-Goals as input.
-→ run `to-spec`.
+**3. Generate the PRD** — Once the problem and scope are locked, hand off to `to-spec` to
+produce the PRD mechanically. It is user-invoked (`disable-model-invocation: true`), so the
+Skill tool cannot reach it: restate the distilled problem statement, user stories, and
+Non-Goals in the conversation, then **tell the user to run `/to-spec`** — it reads that
+context. Same session, so the Naming boundary below stays loaded and still governs.
 
-**4. Decompose into Issues** — After PRD approval, invoke `to-tickets` to slice the PRD
-into independently-grabbable Issues with ordering and dependencies.
-→ run `to-tickets`.
+**4. Decompose into Issues** — After PRD approval, hand off to `to-tickets` to slice the PRD
+into independently-grabbable Issues with ordering and dependencies. Same boundary: **tell
+the user to run `/to-tickets`**.
 
 > **Naming boundary.** `to-spec` and `to-tickets` are the upstream (Matt Pocock v1.1)
 > invocation names; this project keeps its own glossary. The artifacts stay a **PRD** and
@@ -68,12 +69,13 @@ contradicts it; it can be defined without defining or renaming anything else):
 existing `CONTEXT.md` entry, **or** (b) two or more new terms are interdependent (defining
 one forces defining or renaming the others), do **not** patch inline. Instead:
 1. Name the conflict or coupling to the user.
-2. Emit a handoff via `handoff`, and **inject this contract into the handoff**: the
-   `grill-with-docs` session must narrate changes to the user in Traditional Chinese, and
-   any resulting `CONTEXT.md` or ADR edits must travel in a dedicated PR whose body
-   contains a Traditional Chinese `## 變更說明` section naming which terms changed and why.
-3. In a fresh session, run `grill-with-docs` to resolve the vocabulary before returning to
-   Strategic Planning.
+2. State this contract in the conversation, then **tell the user to run `/handoff`** (it is
+   user-invoked; the handoff must carry the contract): the `grill-with-docs` session must
+   narrate changes to the user in Traditional Chinese, and any resulting `CONTEXT.md` or ADR
+   edits must travel in a dedicated PR whose body contains a Traditional Chinese
+   `## 變更說明` section naming which terms changed and why.
+3. Tell the user to open a fresh session and run `/grill-with-docs` to resolve the
+   vocabulary before returning to Strategic Planning.
 
 This is the reentry trigger: Strategic Planning runs once per feature and is the step that
 notices new language and reopens Alignment.
