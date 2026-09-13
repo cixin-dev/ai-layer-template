@@ -1,3 +1,4 @@
 .obsidian/
 notify.local.conf
 .night-shift/
+__pycache__/

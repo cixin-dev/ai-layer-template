@@ -28,7 +28,9 @@ in context:
 - (a) a source checkout **behind its upstream** — fetch at most once per day (`FETCH_HEAD`
   mtime), bounded by `timeout`, fail open without network;
 - (b) a source checkout **not on its default branch, or dirty** — the reverse hazard: every
-  downstream session is running unreviewed edits;
+  downstream session is running unreviewed edits. *Amended 2026-09-13 (retroactive:
+  freshness-dirty-plan-drafts):* untracked files under `.agents/plans/` are exempt from "dirty" —
+  they are `/implement`'s declared pickup state, not an edit any downstream session runs;
 - (c) a **dangling symlink** in `~/.claude/{commands,skills}`;
 - (d) a hook copy **missing from or differing to** `<repo>/.claude/hooks/`.
 

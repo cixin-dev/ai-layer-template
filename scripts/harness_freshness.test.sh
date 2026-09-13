@@ -243,6 +243,24 @@ run --strict
 assert_rc "$RC" 1 "test(17): command with missing skill dependency --strict exits 1"
 assert_contains "$OUT" "skill dependency missing: $CLAUDE_HOME_DIR/commands/bar.md calls the Skill tool with \"nowhere\"" "test(17): names the command and the missing dependency"
 
+# --- (18) untracked plan draft on main is the /implement pickup state → not dirty ---
+# implement.md's pre-flight table names "only untracked files under .agents/plans/" as
+# Expected; (b) fired on it from its first session — a line the operator could only dismiss
+# (retroactive: freshness-dirty-plan-drafts). The fixture tracks nothing under .agents/, so
+# porcelain collapses the draft to `?? .agents/` — the fresh-downstream-project case.
+setup_fixture
+mkdir -p "$SRC/.agents/plans"
+echo '# Plan: draft' > "$SRC/.agents/plans/draft.plan.md"
+run --strict
+assert_rc "$RC" 0 "test(18): untracked plan draft --strict exits 0"
+assert_not_contains "$OUT" "working tree dirty" "test(18): a plan draft is not dirty"
+
+# --- (19) any other untracked file is still dirty (the exemption is exactly one path class) ---
+echo '# new' > "$SRC/.claude/commands/new.md"
+run --strict
+assert_rc "$RC" 1 "test(19): untracked file outside .agents/plans/ --strict exits 1"
+assert_contains "$OUT" "working tree dirty" "test(19): names the dirty state"
+
 # --- (10) empty user scope (fresh machine): nothing to check → rc 0 ---
 rm -rf "$CLAUDE_HOME_DIR"
 mkdir -p "$CLAUDE_HOME_DIR"
