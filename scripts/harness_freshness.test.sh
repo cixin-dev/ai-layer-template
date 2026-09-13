@@ -201,6 +201,48 @@ run --strict
 assert_rc "$RC" 0 "test(13): PATH claude linked to the local install is fresh"
 unset HOOK_PATH
 
+# --- (14) Skill-tool dependency missing: a linked skill calls a skill that is not linked ---
+# Hand-picked symlinks (ADR-0007) miss shared deps silently: grill-me / grill-with-docs /
+# triage sat broken on "grilling" / "domain-modeling" (retroactive: skill-dep-closure).
+# The "twice, for" form carries two names; one resolves, one doesn't → exactly one finding.
+setup_fixture
+mkdir -p "$CLAUDE_HOME_DIR/skills/present"
+printf -- '---\nname: present\ndescription: model-invoked\n---\nbody\n' > "$CLAUDE_HOME_DIR/skills/present/SKILL.md"
+echo 'Call the Skill tool twice, for "present" and "absent".' >> "$SRC/.claude/skills/foo/SKILL.md"
+git -C "$SRC" commit -q -am "foo depends on present + absent"
+run --strict
+assert_rc "$RC" 1 "test(14): missing skill dependency --strict exits 1"
+assert_contains "$OUT" "skill dependency missing: $CLAUDE_HOME_DIR/skills/foo/SKILL.md calls the Skill tool with \"absent\"" "test(14): names the caller and the missing dependency"
+assert_not_contains "$OUT" '"present"' "test(14): a resolved, model-invoked dependency is never a finding"
+dep_count=$(printf '%s\n' "$OUT" | grep -c "skill dependency" || true)
+if [ "$dep_count" -ne 1 ]; then
+  echo "FAIL: test(14): $dep_count dependency findings (want exactly 1 — only the absent one)"
+  FAILURES=$((FAILURES + 1))
+fi
+
+# --- (15) dependency linked → green (the same fixture, dependency now present) ---
+mkdir -p "$CLAUDE_HOME_DIR/skills/absent"
+printf -- '---\nname: absent\ndescription: model-invoked\n---\nbody\n' > "$CLAUDE_HOME_DIR/skills/absent/SKILL.md"
+run --strict
+assert_rc "$RC" 0 "test(15): once every dependency is linked and model-invoked, --strict exits 0"
+
+# --- (16) dependency is user-invoked (disable-model-invocation: true) → unreachable ---
+# The harness drops user-invoked skills from the model's listing, so no skill can reach one
+# via the Skill tool (probed 2026-09-13: "cannot be used with Skill tool"). Only the human can.
+printf -- '---\nname: absent\ndescription: human-only\ndisable-model-invocation: true\n---\nbody\n' > "$CLAUDE_HOME_DIR/skills/absent/SKILL.md"
+run --strict
+assert_rc "$RC" 1 "test(16): user-invoked dependency --strict exits 1"
+assert_contains "$OUT" "skill dependency unreachable: $CLAUDE_HOME_DIR/skills/foo/SKILL.md calls the Skill tool with \"absent\"" "test(16): names the caller and the unreachable dependency"
+assert_contains "$OUT" "tell the user to run /absent" "test(16): tells the author the remedy"
+
+# --- (17) a command (not only a skill) that calls an unlinked skill is also a finding ---
+setup_fixture
+echo 'Call the Skill tool with "nowhere".' >> "$SRC/.claude/commands/bar.md"
+git -C "$SRC" commit -q -am "bar depends on nowhere"
+run --strict
+assert_rc "$RC" 1 "test(17): command with missing skill dependency --strict exits 1"
+assert_contains "$OUT" "skill dependency missing: $CLAUDE_HOME_DIR/commands/bar.md calls the Skill tool with \"nowhere\"" "test(17): names the command and the missing dependency"
+
 # --- (10) empty user scope (fresh machine): nothing to check → rc 0 ---
 rm -rf "$CLAUDE_HOME_DIR"
 mkdir -p "$CLAUDE_HOME_DIR"

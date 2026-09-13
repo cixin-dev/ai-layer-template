@@ -26,7 +26,7 @@
 
 | Repo Path | Author | Upstream Skills Available |
 |-----------|--------|---------------------------|
-| `/mnt/nfs/dylan_workspace/github-repo/mattpocock-skills/` | Matt Pocock | 25 skills across 5 categories (engineering, productivity, personal, misc, in-progress) |
+| `/mnt/nfs/dylan_workspace/mattpocock-skills/` | Matt Pocock | 25 skills across 5 categories (engineering, productivity, personal, misc, in-progress) |
 | `/mnt/nfs/dylan_workspace/github-repo/ai-transformation-workshop/` | Cole Medin | 2 skills: `agent-browser`, `pptx-generator` |
 | `/mnt/nfs/dylan_workspace/github-repo/second-brain-starter/` | Cole Medin | 1 skill: `create-second-brain-prd` |
 
@@ -247,7 +247,7 @@ These are **intentionally excluded** from the two-phase harness; they solve diff
 
 ### Matt Pocock — mattpocock-skills Repo
 **GitHub:** `https://github.com/mattpocock/mattpocock-skills`  
-**Local Clone:** `/mnt/nfs/dylan_workspace/github-repo/mattpocock-skills/`  
+**Local Clone:** `/mnt/nfs/dylan_workspace/mattpocock-skills/`  
 **Symlinked into:** `~/.claude/skills/` (25 of ~28 skills)  
 **KB Reference:** 
 - `/mnt/nfs/dylan_workspace/llm-knowledge-base/raw/20260424 Full Walkthrough Workflow for AI Coding — Matt Pocock.md` (workshop, covers grill-me, to-prd, to-issues, Ralph loop/AFK agent)
