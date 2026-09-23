@@ -114,6 +114,18 @@ flock -n -E 0 "$LOCK" echo RAN; echo "free rc=$?"
 exec 9>&-; rm -f "$LOCK"
 ```
 
+**Self-sync — no hand-pull.** Every `drain` pass first fast-forwards the clone's `main` to
+`origin/main`, queue-independent, and finishes the pass on the pulled code — a merged fix
+reaches the Night Shift within one tick. (Before this, only a PIV drive pulled; an idle queue
+froze the clone two months at `6a8cc5c` — retroactive: night-shift-clone-auto-pull.) A clone
+that cannot fast-forward — off `main`, diverged, a local edit the pull would overwrite, fetch
+failing — is **refused**: nothing dispatches, the log carries `sync: REFUSED — <reason>` every
+pass, and one `Night Shift sync refused` push fires per streak. Dirty alone is **not** refused:
+edits the pull doesn't touch, and untracked files (plan drafts), ride along (plain ff-only, like a
+hand `git pull --ff-only`). Fix the clone by hand; the next tick recovers on its own. The
+kill switch suspends the sync too — a stopped clone is yours to work in. Covered by
+`scripts/night_shift_loop.test.sh` Slice Y (real-git fixture, known-bad → known-good).
+
 Serial (dial = 1): only one Issue runs at a time.
 
 ---
@@ -149,8 +161,9 @@ OUT="$(NIGHT_SHIFT_GH="$PROBEDIR/gh-good" NIGHT_SHIFT_RUN="$PROBEDIR/run" \
 # → observed: rc=0, output contains "kill switch"  ✓
 
 # known-bad: no stop file → loop runs (exits via MAX_POLLS=1 here, not kill switch)
+# NIGHT_SHIFT_SYNC=0: a drain run outside the clone must not fetch/fast-forward this checkout
 RUNDIR=$(mktemp -d)
-OUT2="$(NIGHT_SHIFT_GH="$PROBEDIR/gh-empty" NIGHT_SHIFT_RUN="$PROBEDIR/run" \
+OUT2="$(NIGHT_SHIFT_SYNC=0 NIGHT_SHIFT_GH="$PROBEDIR/gh-empty" NIGHT_SHIFT_RUN="$PROBEDIR/run" \
         NIGHT_SHIFT_STATE_DIR="$RUNDIR" NIGHT_SHIFT_STOP_FILE="$RUNDIR/stop" \
         NIGHT_SHIFT_MAX_POLLS=1 NIGHT_SHIFT_SLEEP=true \
         bash scripts/night_shift_loop.sh loop 2>&1)"
@@ -186,6 +199,9 @@ The loop idles (polling every `POLL_INTERVAL` seconds) when the queue is empty. 
   re-try after human intervention.
 - **Runaway cap** (executor exited rc 3): same as stuck — Issue keeps `in-progress`, loop
   skips it indefinitely.
+- **Sync refused** (`sync: REFUSED` in the log, one push per streak): the whole queue waits —
+  a clone that cannot fast-forward `main` never dispatches (§4 Self-sync). Put the clone back on
+  a clean `main` that fast-forwards; the next tick syncs and resumes.
 
 ---
 
@@ -202,7 +218,8 @@ RC=0; OUT="$(NIGHT_SHIFT_CONCURRENCY=2 bash scripts/night_shift_loop.sh loop 2>&
 # → observed: rc=2, output contains "serial only in v1 (concurrency=2 …)"  ✓
 
 # known-good: CONCURRENCY=1 (default) → no "serial only" error
-RC=0; OUT="$(NIGHT_SHIFT_CONCURRENCY=1 NIGHT_SHIFT_MAX_POLLS=1 NIGHT_SHIFT_SLEEP=true \
+# NIGHT_SHIFT_SYNC=0: a drain run outside the clone must not fetch/fast-forward this checkout
+RC=0; OUT="$(NIGHT_SHIFT_SYNC=0 NIGHT_SHIFT_CONCURRENCY=1 NIGHT_SHIFT_MAX_POLLS=1 NIGHT_SHIFT_SLEEP=true \
              NIGHT_SHIFT_GH="$PROBEDIR/gh-empty" NIGHT_SHIFT_RUN="$PROBEDIR/run" \
              NIGHT_SHIFT_STATE_DIR="$(mktemp -d)" \
              bash scripts/night_shift_loop.sh loop 2>&1)" || RC=$?

@@ -134,6 +134,19 @@ exit 0
 SLEEPEOF
 chmod +x "$BIN/fakesleep"
 
+# --- fake NOTIFY -------------------------------------------------------------
+cat > "$BIN/notify" << 'NOTIFYEOF'
+#!/usr/bin/env bash
+[ -n "${NOTIFY_LOG:-}" ] && echo "notify $*" >> "$NOTIFY_LOG"
+exit 0
+NOTIFYEOF
+chmod +x "$BIN/notify"
+
+# Hermetic by default: every drain below would otherwise fetch + fast-forward the
+# REAL checkout this suite runs in. Slice Y opts back in against a throwaway fixture.
+export NIGHT_SHIFT_SYNC=0
+export NIGHT_SHIFT_NOTIFY="$BIN/notify"
+
 # =============================================================================
 # Slice S — select_issue
 # =============================================================================
@@ -317,6 +330,142 @@ assert_eq "$RC" "0" "(G2) drain with stop sentinel present → exit 0"
 assert_eq "$g2_stop" "present" "(G2) stop sentinel untouched by GC (*.state glob excludes it)"
 [ -e "$ST_G2/88.state" ] && g2_88=present || g2_88=gone
 assert_eq "$g2_88" "gone" "(G2) CLOSED #88 state cleared before kill-switch short-circuit"
+
+# =============================================================================
+# Slice Y — clone sync (retroactive: night-shift-clone-auto-pull)
+# =============================================================================
+# Real-git fixture mirroring production: a bare origin, a dev clone that lands
+# "merges", and the Night Shift clone `ns` running its OWN copy of the loop (as the
+# cron wrapper does), so a pulled loop change is observable in the same pass.
+# Origin advances by fetching into the bare repo.
+
+mk_fixture() {  # $1 dir → dev/, origin.git/, ns/ at one commit carrying the loop
+  mkdir -p "$1/dev/scripts"
+  git init -q -b main "$1/dev"
+  cp "$LOOP" "$SCRIPT_DIR/loop_state.sh" "$1/dev/scripts/"
+  git -C "$1/dev" add -A
+  git -C "$1/dev" -c user.email=t@t -c user.name=t commit -qm base
+  git clone -q --bare "$1/dev" "$1/origin.git"
+  git clone -q "$1/origin.git" "$1/ns"
+}
+
+land() {  # $1 dir → commit dev's pending edits (plus a marker) and advance origin/main
+  date +%s%N > "$1/dev/landed"
+  git -C "$1/dev" add -A
+  git -C "$1/dev" -c user.email=t@t -c user.name=t commit -qm landed
+  git -C "$1/origin.git" fetch -q "$1/dev" main:main
+}
+
+ns_drain() {  # $1 dir → one drain pass of the clone's own loop, sync on (output on stdout)
+  timeout 20 env NIGHT_SHIFT_SYNC=1 NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" \
+    NIGHT_SHIFT_SLEEP="$BIN/fakesleep" NIGHT_SHIFT_STATE_DIR="$1/state" \
+    RUN_STATE="$1/run" NOTIFY_LOG="$1/notify.log" \
+    FAKE_GH_TSV="$(printf '62\tready-for-agent')" \
+    bash "$1/ns/scripts/night_shift_loop.sh" drain 2>&1
+}
+
+head_of() { git -C "$1" rev-parse "${2:-HEAD}"; }
+
+# (Y1) idle-proof: the clone is behind origin by a landed change to the loop itself →
+# drain fast-forwards main AND finishes the pass on the pulled code (re-exec), then
+# dispatches. Pre-fix the clone never moved (sat two months stale at 6a8cc5c).
+FX1="$WORK/fx-y1"; mk_fixture "$FX1"; mkdir -p "$FX1/run"
+sed -i '/^drain() {$/a\  echo "NEWCODE: pass ran the pulled loop"' "$FX1/dev/scripts/night_shift_loop.sh"
+land "$FX1"
+RC=0; OUT_Y1="$(ns_drain "$FX1")" || RC=$?
+assert_eq "$RC" "0" "(Y1) behind clone → drain exits 0"
+assert_eq "$(head_of "$FX1/ns")" "$(head_of "$FX1/origin.git" main)" "(Y1) clone main fast-forwarded to origin/main"
+assert_contains "$OUT_Y1" "sync: main" "(Y1) advance logged"
+assert_contains "$OUT_Y1" "NEWCODE: pass ran the pulled loop" "(Y1) rest of the pass re-exec'd onto the pulled loop"
+assert_contains "$OUT_Y1" "dispatch: #62" "(Y1) pass still dispatches after the sync"
+
+# (Y2) already current → silent (no sync line, no notify), dispatch proceeds.
+FX2="$WORK/fx-y2"; mk_fixture "$FX2"; mkdir -p "$FX2/run"
+RC=0; OUT_Y2="$(ns_drain "$FX2")" || RC=$?
+assert_eq "$RC" "0" "(Y2) current clone → drain exits 0"
+assert_not_contains "$OUT_Y2" "sync:" "(Y2) no sync output when already current"
+assert_contains "$OUT_Y2" "dispatch: #62" "(Y2) dispatch proceeds"
+[ -e "$FX2/notify.log" ] && y2_n=fired || y2_n=silent
+assert_eq "$y2_n" "silent" "(Y2) no notify when current"
+
+# (Y3) refused — clone left off main → HEAD untouched, loud, NO dispatch, notify once
+# per refusal streak (a second refused pass stays quiet); back on main → the sync
+# recovers, clears the streak marker, and the pass dispatches.
+FX3="$WORK/fx-y3"; mk_fixture "$FX3"; mkdir -p "$FX3/run"
+land "$FX3"
+git -C "$FX3/ns" checkout -q -b stray
+before_y3="$(head_of "$FX3/ns")"
+RC=0; OUT_Y3="$(ns_drain "$FX3")" || RC=$?
+assert_eq "$RC" "0" "(Y3) off-main clone → drain exits 0"
+assert_eq "$(head_of "$FX3/ns")" "$before_y3" "(Y3) refused sync leaves HEAD untouched"
+assert_contains "$OUT_Y3" "sync: REFUSED" "(Y3) refusal is loud"
+assert_contains "$OUT_Y3" "'stray', not main" "(Y3) refusal names the off-main branch"
+assert_not_contains "$OUT_Y3" "dispatch:" "(Y3) no dispatch on a clone that cannot sync"
+RC=0; ns_drain "$FX3" > /dev/null || RC=$?
+assert_eq "$(grep -c '^notify fail' "$FX3/notify.log" || echo 0)" "1" "(Y3) notify fires once per refusal streak"
+git -C "$FX3/ns" checkout -q main
+RC=0; OUT_Y3b="$(ns_drain "$FX3")" || RC=$?
+assert_eq "$(head_of "$FX3/ns")" "$(head_of "$FX3/origin.git" main)" "(Y3) back on main → sync recovers"
+[ -e "$FX3/state/sync-refused" ] && y3_m=present || y3_m=gone
+assert_eq "$y3_m" "gone" "(Y3) recovery clears the refusal marker"
+assert_contains "$OUT_Y3b" "dispatch: #62" "(Y3) recovered pass dispatches"
+
+# (Y4) refused — clone main diverged from origin (a local commit) → never merged or
+# reset: HEAD and the local commit stay, no dispatch.
+FX4="$WORK/fx-y4"; mk_fixture "$FX4"; mkdir -p "$FX4/run"
+land "$FX4"
+: > "$FX4/ns/local-only"; git -C "$FX4/ns" add local-only
+git -C "$FX4/ns" -c user.email=t@t -c user.name=t commit -qm local-only
+before_y4="$(head_of "$FX4/ns")"
+RC=0; OUT_Y4="$(ns_drain "$FX4")" || RC=$?
+assert_eq "$RC" "0" "(Y4) diverged clone → drain exits 0"
+assert_eq "$(head_of "$FX4/ns")" "$before_y4" "(Y4) diverged main neither merged nor reset"
+assert_contains "$OUT_Y4" "sync: REFUSED" "(Y4) divergence is loud"
+assert_not_contains "$OUT_Y4" "dispatch:" "(Y4) no dispatch on a diverged clone"
+
+# (Y5) kill switch present → the sync never runs: a quiesced clone is the operator's.
+FX5="$WORK/fx-y5"; mk_fixture "$FX5"; mkdir -p "$FX5/run" "$FX5/state"
+land "$FX5"; : > "$FX5/state/stop"
+before_y5="$(head_of "$FX5/ns")"
+RC=0; ns_drain "$FX5" > /dev/null || RC=$?
+assert_eq "$(head_of "$FX5/ns")" "$before_y5" "(Y5) stopped drain leaves the clone untouched"
+
+# (Y6) NIGHT_SHIFT_SYNC=0 really skips — the hatch that keeps every other slice off the
+# real checkout must itself be proven, or a broken hatch fast-forwards it silently.
+FX6="$WORK/fx-y6"; mk_fixture "$FX6"; mkdir -p "$FX6/run"
+land "$FX6"
+before_y6="$(head_of "$FX6/ns")"
+RC=0
+OUT_Y6="$(NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" NIGHT_SHIFT_STATE_DIR="$FX6/state" \
+           RUN_STATE="$FX6/run" FAKE_GH_TSV="" \
+           bash "$FX6/ns/scripts/night_shift_loop.sh" drain 2>&1)" || RC=$?
+assert_eq "$(head_of "$FX6/ns")" "$before_y6" "(Y6) NIGHT_SHIFT_SYNC=0 leaves a behind clone untouched"
+assert_not_contains "$OUT_Y6" "sync:" "(Y6) no sync output with the hatch off"
+
+# (Y7) "dirty" is refused only where ff-only refuses: a local edit the pull would
+# overwrite → refused, edit intact, no dispatch; an edit the pull doesn't touch rides
+# along (fast-forwarded, dispatched); a failing fetch → refused.
+FX7="$WORK/fx-y7"; mk_fixture "$FX7"; mkdir -p "$FX7/run"
+echo "# landed" >> "$FX7/dev/scripts/loop_state.sh"; land "$FX7"
+echo "# local" >> "$FX7/ns/scripts/loop_state.sh"
+before_y7="$(head_of "$FX7/ns")"
+RC=0; OUT_Y7="$(ns_drain "$FX7")" || RC=$?
+assert_eq "$(head_of "$FX7/ns")" "$before_y7" "(Y7) edit the pull would overwrite → HEAD untouched"
+assert_contains "$OUT_Y7" "sync: REFUSED" "(Y7) overwrite refusal is loud"
+assert_not_contains "$OUT_Y7" "dispatch:" "(Y7) no dispatch when the pull would overwrite an edit"
+assert_eq "$(tail -n 1 "$FX7/ns/scripts/loop_state.sh")" "# local" "(Y7) refused sync keeps the local edit"
+FX7b="$WORK/fx-y7b"; mk_fixture "$FX7b"; mkdir -p "$FX7b/run"
+land "$FX7b"
+echo "# local" >> "$FX7b/ns/scripts/loop_state.sh"
+RC=0; OUT_Y7b="$(ns_drain "$FX7b")" || RC=$?
+assert_eq "$(head_of "$FX7b/ns")" "$(head_of "$FX7b/origin.git" main)" "(Y7) untouched edit → clone still fast-forwarded"
+assert_eq "$(tail -n 1 "$FX7b/ns/scripts/loop_state.sh")" "# local" "(Y7) untouched edit carried across the pull"
+assert_contains "$OUT_Y7b" "dispatch: #62" "(Y7) untouched edit → pass dispatches"
+FX7c="$WORK/fx-y7c"; mk_fixture "$FX7c"; mkdir -p "$FX7c/run"
+git -C "$FX7c/ns" remote set-url origin "$FX7c/missing.git"
+RC=0; OUT_Y7c="$(ns_drain "$FX7c")" || RC=$?
+assert_contains "$OUT_Y7c" "sync: REFUSED" "(Y7) failing fetch is refused"
+assert_not_contains "$OUT_Y7c" "dispatch:" "(Y7) no dispatch when fetch fails"
 
 # =============================================================================
 # Slice L — loop (persistent poll + kill switch)

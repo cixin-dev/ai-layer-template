@@ -26,6 +26,9 @@
 #   NIGHT_SHIFT_STOP_FILE     (default: $STATE_DIR/stop)     kill switch sentinel
 #   NIGHT_SHIFT_CONCURRENCY   (default: 1)                   serial dial (v1 only)
 #   NIGHT_SHIFT_MAX_POLLS     (default: "")                  empty = unbounded
+#   NIGHT_SHIFT_NOTIFY        (default: .claude/hooks/notify.sh)  sync-refusal alert
+#   NIGHT_SHIFT_SYNC          (default: 1)                   0 = skip the per-pass clone
+#                                                            sync (tests/dry-runs outside the clone)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -42,6 +45,9 @@ MAX_POLLS="${NIGHT_SHIFT_MAX_POLLS:-}"
 export NIGHT_SHIFT_STATE_DIR="${NIGHT_SHIFT_STATE_DIR:-$ROOT/.night-shift}"
 STOP_FILE="${NIGHT_SHIFT_STOP_FILE:-$NIGHT_SHIFT_STATE_DIR/stop}"
 STORE="$SCRIPT_DIR/loop_state.sh"          # sibling loop-state script (night_shift_run.sh:43)
+NOTIFY="${NIGHT_SHIFT_NOTIFY:-$SCRIPT_DIR/../.claude/hooks/notify.sh}"
+SYNC="${NIGHT_SHIFT_SYNC:-1}"
+SYNC_MARK="$NIGHT_SHIFT_STATE_DIR/sync-refused"   # refusal-streak marker (notify once)
 
 # --- selection seams ---------------------------------------------------------
 
@@ -111,10 +117,57 @@ _gc_closed_states() {
   done
 }
 
+# _sync_main — fast-forward the clone's `main` to `origin/main` at the top of every pass,
+# queue-independent. Nothing else keeps the clone current: only a PIV drive pulls, and a
+# drive needs a ready Issue, so an idle queue froze the clone two months at 6a8cc5c while
+# every merged loop/executor/command fix silently never ran (retroactive:
+# night-shift-clone-auto-pull). Auto-pull is safe here — unlike from a hook (ADR-0029) —
+# because the flock-held drain is the clone's only actor (ADR-0024). FF-only: a clone that
+# cannot fast-forward (off main, diverged, a local edit the pull would overwrite, fetch
+# failing) is refused, never merged or reset; edits the pull doesn't touch ride along.
+# rc 0 = already current, 10 = advanced (caller re-execs), 1 = refused.
+_sync_main() {
+  local branch before err
+  branch="$(git -C "$ROOT" branch --show-current 2>/dev/null || true)"
+  if [ "$branch" != "main" ]; then
+    _sync_refused "clone is on '${branch:-detached HEAD}', not main"
+    return 1
+  fi
+  before="$(git -C "$ROOT" rev-parse HEAD)"
+  if ! err="$(git -C "$ROOT" fetch -q origin main 2>&1 \
+              && git -C "$ROOT" merge -q --ff-only origin/main 2>&1)"; then
+    # git leads with hint:/usage lines; the first fatal:/error: line is the reason.
+    _sync_refused "$(grep -m1 -E '^(fatal|error):' <<< "$err" || head -n 1 <<< "$err")"
+    return 1
+  fi
+  rm -f "$SYNC_MARK"
+  [ "$(git -C "$ROOT" rev-parse HEAD)" = "$before" ] && return 0
+  echo "sync: main ${before:0:7} → $(git -C "$ROOT" rev-parse --short HEAD) — re-exec on the pulled code"
+  return 10
+}
+
+# _sync_refused REASON — loud on every refused pass; notify once per refusal streak (the
+# marker), so a clone stuck for a night pings the operator once, not every 5 minutes.
+_sync_refused() {
+  echo "sync: REFUSED — $1 — no dispatch until the clone can fast-forward main" >&2
+  [ -f "$SYNC_MARK" ] && return 0
+  mkdir -p "$NIGHT_SHIFT_STATE_DIR" && : > "$SYNC_MARK"
+  "$NOTIFY" fail "Night Shift sync refused" "$ROOT: $1 — no dispatch until main can fast-forward" || true
+}
+
 # --- subcommands -------------------------------------------------------------
 
 drain() {
   _require_serial || return $?
+  # Not while stopped: a quiesced clone is the operator's to touch (the HEAD race, ADR-0024).
+  if [ "$SYNC" = "1" ] && ! _stopped; then
+    local sync_rc=0
+    _sync_main || sync_rc=$?
+    # Advanced → finish this pass on the pulled code; a persistent loop() would otherwise
+    # never re-read its own script. Refused → skip the pass (loud), retry next poll.
+    [ "$sync_rc" -eq 10 ] && exec bash "$0" "${ENTRY_ARGS[@]}"
+    [ "$sync_rc" -eq 0 ] || return 0
+  fi
   _gc_closed_states                    # poll-time GC of closed-Issue loop state (#97)
   local dispatched=""
   while :; do
@@ -178,6 +231,7 @@ usage() {
 # --- entry -------------------------------------------------------------------
 
 main() {
+  ENTRY_ARGS=("$@")                    # drain's post-sync re-exec replays the entry verbatim
   local cmd="${1:-}"
   case "$cmd" in
     select) select_issue ;;
