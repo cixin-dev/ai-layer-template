@@ -10,7 +10,8 @@
 # session start (ADR-0029).
 #
 # Source repos are discovered by resolving the symlinks — never hardcoded. Per repo:
-#   (a) HEAD behind its upstream            — fetch at most once per FETCH_MINUTES; fail open
+#   (a) HEAD behind its upstream            — fetch at most once per FETCH_MINUTES; fail open;
+#       remedy names <repo>/scripts/sync.sh when the repo owns one, else pull-only
 #   (b) not on the default branch, or dirty — downstream sessions run unreviewed edits;
 #       untracked .agents/plans/ drafts are exempt (the /implement pickup state, not an edit)
 #   (d) <repo>/.claude/hooks/* missing from, or differing to, ~/.claude/hooks/*
@@ -99,8 +100,14 @@ check_behind() {
   up="$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" || return 0
   fetch_once "$repo" "${up%%/*}"
   behind="$(git -C "$repo" rev-list --count "HEAD..$up" 2>/dev/null)" || return 0
-  if [ "$behind" -gt 0 ]; then
-    finding "$repo: $behind commit(s) behind $up — pull it, then re-run its sync"
+  [ "$behind" -gt 0 ] || return 0
+  # Name the exact remedy for THIS source: "re-run its sync" sent the operator to a repo with
+  # no sync, whose own installer (mattpocock's link-skills.sh) links every skill — the
+  # intruders ADR-0007/0029 hand-pick out (retroactive: freshness-remedy-per-source).
+  if [ -f "$repo/scripts/sync.sh" ]; then
+    finding "$repo: $behind commit(s) behind $up — pull it, then run bash $repo/scripts/sync.sh"
+  else
+    finding "$repo: $behind commit(s) behind $up — pull it; nothing to sync (links point into the checkout and are hand-picked, ADR-0007 — never run its own link installer)"
   fi
 }
 
@@ -136,9 +143,9 @@ check_hook_copies() {
     [ -f "$src" ] || continue
     name="$(basename "$src")"
     if [ ! -f "$CLAUDE_DIR/hooks/$name" ]; then
-      finding "hook copy missing: $CLAUDE_DIR/hooks/$name (source $src) — run scripts/sync.sh"
+      finding "hook copy missing: $CLAUDE_DIR/hooks/$name (source $src) — run bash $repo/scripts/sync.sh"
     elif ! cmp -s "$src" "$CLAUDE_DIR/hooks/$name"; then
-      finding "hook copy stale: $CLAUDE_DIR/hooks/$name differs from $src — run scripts/sync.sh"
+      finding "hook copy stale: $CLAUDE_DIR/hooks/$name differs from $src — run bash $repo/scripts/sync.sh"
     fi
   done
 }

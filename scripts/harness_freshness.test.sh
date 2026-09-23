@@ -122,9 +122,30 @@ if [ "$behind_count" -ne 1 ]; then
   echo "FAIL: test(2): repo reported $behind_count times (want 1 — links into one repo dedupe)"
   FAILURES=$((FAILURES + 1))
 fi
+# The fixture carries no scripts/sync.sh — the mattpocock-checkout shape. Its links are
+# hand-picked (ADR-0007) and live; "re-run its sync" read as its own installer
+# (link-skills.sh) links every skill, intruders included (retroactive: freshness-remedy-per-source).
+assert_contains "$OUT" "pull it; nothing to sync" "test(2): a repo with no sync.sh gets a pull-only remedy"
+assert_not_contains "$OUT" "sync.sh" "test(2): a repo with no sync.sh is never sent to a sync script"
 run
 assert_rc "$RC" 0 "test(2): hook mode never blocks a session (exit 0 despite findings)"
 assert_contains "$OUT" "1 commit(s) behind" "test(2): hook mode still reports the finding"
+
+# --- (20) behind, and the repo owns scripts/sync.sh → the remedy names that exact script ---
+# By absolute path: a relative `scripts/sync.sh` run from a downstream project's cwd would
+# run that project's copy, not the source repo's.
+setup_fixture
+mkdir -p "$SEED/scripts"
+printf '#!/usr/bin/env bash\n' > "$SEED/scripts/sync.sh"
+git -C "$SEED" add scripts/sync.sh
+git -C "$SEED" commit -q -m "add sync.sh"
+git -C "$SEED" push -q origin main
+git -C "$SRC" pull -q
+advance_upstream "one"
+run --strict
+assert_rc "$RC" 1 "test(20): behind --strict exits 1"
+assert_contains "$OUT" "1 commit(s) behind origin/main — pull it, then run bash $SRC/scripts/sync.sh" "test(20): names the repo's own sync script by absolute path"
+assert_not_contains "$OUT" "nothing to sync" "test(20): a repo with sync.sh never gets the pull-only remedy"
 
 # --- (3) fetch throttle: a fresh FETCH_HEAD suppresses the fetch; 0 forces it ---
 # Continues from (2): the runs above fetched, so FETCH_HEAD is seconds old.
@@ -170,7 +191,7 @@ git -C "$SRC" commit -q -am "hook change"
 run --strict
 assert_rc "$RC" 1 "test(8): stale hook copy --strict exits 1"
 assert_contains "$OUT" "hook copy stale: $CLAUDE_HOME_DIR/hooks/h.py" "test(8): names the stale copy"
-assert_contains "$OUT" "sync.sh" "test(8): tells the operator the remedy"
+assert_contains "$OUT" "run bash $SRC/scripts/sync.sh" "test(8): names the source repo's sync script by absolute path"
 
 # --- (9) hook copy missing ---
 setup_fixture
@@ -178,6 +199,7 @@ rm "$CLAUDE_HOME_DIR/hooks/h.py"
 run --strict
 assert_rc "$RC" 1 "test(9): missing hook copy --strict exits 1"
 assert_contains "$OUT" "hook copy missing: $CLAUDE_HOME_DIR/hooks/h.py" "test(9): names the missing copy"
+assert_contains "$OUT" "run bash $SRC/scripts/sync.sh" "test(9): names the source repo's sync script by absolute path"
 
 # --- (12) PATH `claude` is not the local install: scripts and cron get the PATH one ---
 # A ~/.bashrc alias hid a root-owned npm-global 1.0.8 on PATH behind
