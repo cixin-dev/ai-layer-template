@@ -26,7 +26,10 @@ symlinks (never a hardcoded path) and reports one line per finding on stdout, so
 in context:
 
 - (a) a source checkout **behind its upstream** — fetch at most once per day (`FETCH_HEAD`
-  mtime), bounded by `timeout`, fail open without network;
+  mtime), bounded by `timeout`, fail open without network. *Amended 2026-09-23 (retroactive:
+  freshness-remedy-per-source):* the remedy is per source — `bash <repo>/scripts/sync.sh` when
+  the repo owns one, else pull-only. A uniform "re-run its sync" pointed the mattpocock checkout
+  at its own `link-skills.sh`, which links every skill, the excluded ones included;
 - (b) a source checkout **not on its default branch, or dirty** — the reverse hazard: every
   downstream session is running unreviewed edits. *Amended 2026-09-13 (retroactive:
   freshness-dirty-plan-drafts):* untracked files under `.agents/plans/` are exempt from "dirty" —

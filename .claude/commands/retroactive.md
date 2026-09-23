@@ -40,7 +40,9 @@ check to `.claude/validate.sh` or the project test suite so the Stop hook (ADR-0
 next time — reach for the deterministic gate before a prose rule. Before shipping a gate,
 enumerate the states the Harness already declares expected (e.g. `implement.md`'s pre-flight
 table) and put each in its known-good fixture — a gate that fires on a by-design state is a
-line the operator learns to dismiss. The check is primary but not exclusive: if it catches only
+line the operator learns to dismiss. Likewise assert each finding's *remedy* text against every
+source shape the gate can fire on — a remedy wrong for one shape is a line the operator
+misfollows. The check is primary but not exclusive: if it catches only
 *this instance* while the underlying *class* stays judgment-shaped, keep a prose dimension
 alongside it. Fall through to the prose dimensions below whenever a defect — or the residue a
 check can't express — needs design judgment or a human eye.
