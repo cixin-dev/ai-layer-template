@@ -45,14 +45,16 @@ the main repo as the working directory.
 2. `git pull` — bring main up to date with the squash-merged commit.
 3. Find the worktree path:
    ```
-   git worktree list --porcelain | bash scripts/worktree_path.sh {branch}
+   git worktree list --porcelain | scripts/worktree_path.sh {branch}
    ```
    This resolves the worktree by **exact** branch match. Do **not** hand-roll a
    `grep -A2 "branch refs/heads/{branch}"` here: in porcelain the `branch` line is the
    *last* line of an entry, so scanning forward returns the *next* worktree's path —
    the footgun this script exists to prevent (see `scripts/worktree_path.sh` header,
-   tested by `scripts/worktree_path.test.sh`). If no worktree path is found, skip steps
-   4–4b silently.
+   tested by `scripts/worktree_path.test.sh`). Exec the script by path (it is `100755`,
+   held there by `exec_bit_check.sh`) — do **not** write `| bash scripts/…`: the
+   PreToolUse security guard matches `| bash` as pipe-to-shell and blocks the step every
+   time. If no worktree path is found, skip steps 4–4b silently.
 4. **Rescue check** — before touching the worktree, check for commits added to it
    **after the PR was merged** (the only unmerged risk left, since Phase 2 already
    confirmed the PR is MERGED):
