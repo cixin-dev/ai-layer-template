@@ -100,5 +100,13 @@ executor needs no per-call `env -u` scrubbing.
   superseding one.
 - Reusing `claude -p` means the loop inherits every future improvement to the slash commands and
   hooks with no executor change — the substrate is the product itself, not a reimplementation.
+  *Amended 2026-09-23 (retroactive: night-shift-clone-auto-pull):* only if the clone is current.
+  This ADR named how the clone is *provisioned*, never how it *stays current*; only a PIV drive
+  pulled, so an idle queue froze it two months at `6a8cc5c` and every merged loop/executor/command
+  fix silently never ran. `drain()` now fast-forwards the clone's `main` to `origin/main` at the
+  top of every pass (queue-independent), re-execs onto the pulled code, and on a clone that
+  cannot fast-forward refuses dispatch loudly (log line every pass, one push per streak).
+  Auto-pull is safe here, where ADR-0029 rejects it from a hook, because the flock-held drain is
+  the clone's only actor; the kill switch suspends it.
 - The recurring-invocation substrate (#63) builds on this one; it does not revisit isolation, the
   clone, or the auth posture.
