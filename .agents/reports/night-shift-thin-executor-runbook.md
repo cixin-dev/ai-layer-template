@@ -9,12 +9,35 @@ and needs a throwaway Issue + the dedicated clone. Record the result in
 - **Never merge** the PR the probe opens — it is throwaway.
 - Run **only in the dedicated Night Shift clone**, never your working checkout. Sharing one
   checkout re-creates the HEAD race ADR-0024 resolves.
+- **Quiesce the drain cron first** (§0) — it also runs in the clone and takes any
+  `ready-for-agent` Issue, §2's throwaway included.
 - Leave the **dangerous-push floor on** (`security_guard.py`, ADR-0020). Do not disable it.
 - On **any** failure: STOP, record **NO-GO** with the failure, do not proceed. A failed probe
   means the substrate is invalid — escalate, don't paper over it.
 
-Notation: `NS_CLONE` = the dedicated clone's main checkout; `FEAT_WT` = this feature worktree
-(where the not-yet-merged `scripts/night_shift_run.sh` lives).
+Notation: `NS_CLONE` = the dedicated clone's main checkout (its `scripts/night_shift_run.sh`
+is the executor under test); `NS_LOCK` = the drain cron's `flock` (loop runbook §4).
+
+---
+
+## 0. Quiesce the drain cron (if one is live)
+
+A `*/5` drain in `NS_CLONE` alongside this probe is two actors on one checkout — the HEAD
+race. Stop it before §1(d), wait out any in-flight drive, and resume only after §7:
+```bash
+touch ~/night-shift/ai-layer-template/.night-shift/stop   # drain exits at its next check, before claiming
+flock -n -E 75 ~/.night-shift-loop.lock true; echo "rc $?"   # rc 0 = free; rc 75 = a drive in flight — wait, re-check
+# (rc 0/75 flip grounded by §4's contention case — same flock; a */5 idle tick holds it for seconds)
+```
+Grounding — the live clone's `drain`, zero credit (fake `gh`/executor; re-run by `/validate` Phase 3.5):
+```bash
+T=$(mktemp -d); touch "$T/stop"
+NIGHT_SHIFT_STATE_DIR="$T" NIGHT_SHIFT_GH=true NIGHT_SHIFT_RUN=false bash ~/night-shift/ai-layer-template/scripts/night_shift_loop.sh drain; echo "rc $?"
+# → observed: kill switch: /tmp/tmp.…/stop present — stopping, rc 0  ✓
+rm "$T/stop"   # known-bad: no stop file → drain polls instead (empty fake queue)
+NIGHT_SHIFT_STATE_DIR="$T" NIGHT_SHIFT_GH=true NIGHT_SHIFT_RUN=false bash ~/night-shift/ai-layer-template/scripts/night_shift_loop.sh drain; echo "rc $?"
+# → observed: (no kill-switch line — it polled the empty fake queue), rc 0  ✓  — rc 0, not 127: it ran
+```
 
 ---
 
@@ -52,7 +75,7 @@ git -C ~/night-shift/ai-layer-template pull --ff-only
 Set shell vars for the rest of the card:
 ```bash
 NS_CLONE=~/night-shift/ai-layer-template
-FEAT_WT=/mnt/nfs/dylan_workspace/ai-layer-template-feat61-night-shift-thin-executor
+NS_LOCK=~/.night-shift-loop.lock
 ```
 
 ---
@@ -97,15 +120,30 @@ restartability, but you then see only 2 fresh `claude` processes, not 3.)
 
 ## 4. Task 6 — full end-to-end drive
 
-Run **this branch's** executor, pointed at the **dedicated clone** via `NIGHT_SHIFT_ROOT`
+Run the **clone's** executor, pointed at the **dedicated clone** via `NIGHT_SHIFT_ROOT`
 (this is what keeps the clone on `main` so `/implement` branches correctly, and isolates it
-from your checkout):
+from your checkout), under the drain cron's lock so a missed §0 can't overlap a drain:
 
 ```bash
-NIGHT_SHIFT_ROOT="$NS_CLONE" bash "$FEAT_WT/scripts/night_shift_run.sh" $N
+NIGHT_SHIFT_ROOT="$NS_CLONE" flock -n -E 75 "$NS_LOCK" bash "$NS_CLONE/scripts/night_shift_run.sh" $N
 ```
 It **blocks** through `/plan` → `/implement` → `/validate`, then prints `done: #$N (released
 in-progress)` and exits 0. (`< /dev/null` is already applied per phase by the executor.)
+**rc 75** = the lock is held (a drain is in flight): nothing ran — redo §0, re-launch.
+
+Grounding — zero credit, read-only `snapshot` in place of `$N` (re-run by `/validate` Phase 3.5):
+```bash
+NIGHT_SHIFT_ROOT="$NS_CLONE" flock -n -E 75 "$NS_LOCK" bash "$NS_CLONE/scripts/night_shift_run.sh" snapshot 97; echo "rc $?"
+# → observed: ISSUE_READY=1 … ATTEMPTS=0 (7 KEY=value lines), rc 0  ✓
+# known-bad (the pre-fix path — #61's feature worktree, removed when #61 merged):
+bash /mnt/nfs/dylan_workspace/ai-layer-template-feat61-night-shift-thin-executor/scripts/night_shift_run.sh snapshot 97; echo "rc $?"
+# → observed: bash: …/night_shift_run.sh: No such file or directory, rc 127  ✓  — the dead path this fix replaces
+# contention — hold the lock (an in-flight drain); the launch refuses before the executor starts:
+exec 9>"$NS_LOCK"; flock -n 9
+NIGHT_SHIFT_ROOT="$NS_CLONE" flock -n -E 75 "$NS_LOCK" bash "$NS_CLONE/scripts/night_shift_run.sh" snapshot 97; echo "rc $?"
+# → observed: (no snapshot printed), rc 75  ✓  — flock refused; the executor never started
+flock -u 9; exec 9>&-
+```
 
 ---
 
@@ -142,9 +180,10 @@ All boxes checked ⇒ **GO**. Any box fails ⇒ **NO-GO** (record the failure).
 ## 6. Record the verdict
 
 Edit `night-shift-thin-executor-report.md` → **Go/No-Go**: change 🟡 to ✅ **GO** (or 🔴
-**NO-GO**) with the observed evidence above, and commit on the feature branch:
+**NO-GO**) with the observed evidence above, and commit on a `docs/` branch → PR (never local `main`):
 ```bash
-cd "$FEAT_WT"
+cd <your working checkout>                     # never $NS_CLONE
+git checkout -b docs/ns-probe-verdict main
 git add .agents/reports/night-shift-thin-executor-report.md
 git commit -m "docs(report): record live Seam-3 probe Go/No-Go for #61"
 ```
@@ -162,6 +201,7 @@ gh issue close $N                        # close the throwaway Issue
 WT=$(git -C "$NS_CLONE" worktree list --porcelain | "$NS_CLONE/scripts/worktree_path.sh" "feat/$N-<slug>")
 git -C "$NS_CLONE" worktree remove "$WT"
 # the dedicated clone itself can stay for future Night Shift use
+rm "$NS_CLONE/.night-shift/stop"          # resume the drain cron quiesced in §0
 ```
 Grounding — the resolver exec'd by path in `NS_CLONE` (re-run by `/validate` Phase 3.5):
 ```bash
