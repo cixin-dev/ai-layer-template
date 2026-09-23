@@ -123,8 +123,9 @@ _gc_closed_states() {
 # every merged loop/executor/command fix silently never ran (retroactive:
 # night-shift-clone-auto-pull). Auto-pull is safe here — unlike from a hook (ADR-0029) —
 # because the flock-held drain is the clone's only actor (ADR-0024). FF-only: a clone that
-# cannot fast-forward (off main, dirty, diverged, fetch failing) is refused, never merged
-# or reset. rc 0 = already current, 10 = advanced (caller re-execs), 1 = refused.
+# cannot fast-forward (off main, diverged, a local edit the pull would overwrite, fetch
+# failing) is refused, never merged or reset; edits the pull doesn't touch ride along.
+# rc 0 = already current, 10 = advanced (caller re-execs), 1 = refused.
 _sync_main() {
   local branch before err
   branch="$(git -C "$ROOT" branch --show-current 2>/dev/null || true)"

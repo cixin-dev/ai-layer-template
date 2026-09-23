@@ -442,6 +442,31 @@ OUT_Y6="$(NIGHT_SHIFT_GH="$BIN/gh" NIGHT_SHIFT_RUN="$BIN/run" NIGHT_SHIFT_STATE_
 assert_eq "$(head_of "$FX6/ns")" "$before_y6" "(Y6) NIGHT_SHIFT_SYNC=0 leaves a behind clone untouched"
 assert_not_contains "$OUT_Y6" "sync:" "(Y6) no sync output with the hatch off"
 
+# (Y7) "dirty" is refused only where ff-only refuses: a local edit the pull would
+# overwrite → refused, edit intact, no dispatch; an edit the pull doesn't touch rides
+# along (fast-forwarded, dispatched); a failing fetch → refused.
+FX7="$WORK/fx-y7"; mk_fixture "$FX7"; mkdir -p "$FX7/run"
+echo "# landed" >> "$FX7/dev/scripts/loop_state.sh"; land "$FX7"
+echo "# local" >> "$FX7/ns/scripts/loop_state.sh"
+before_y7="$(head_of "$FX7/ns")"
+RC=0; OUT_Y7="$(ns_drain "$FX7")" || RC=$?
+assert_eq "$(head_of "$FX7/ns")" "$before_y7" "(Y7) edit the pull would overwrite → HEAD untouched"
+assert_contains "$OUT_Y7" "sync: REFUSED" "(Y7) overwrite refusal is loud"
+assert_not_contains "$OUT_Y7" "dispatch:" "(Y7) no dispatch when the pull would overwrite an edit"
+assert_eq "$(tail -n 1 "$FX7/ns/scripts/loop_state.sh")" "# local" "(Y7) refused sync keeps the local edit"
+FX7b="$WORK/fx-y7b"; mk_fixture "$FX7b"; mkdir -p "$FX7b/run"
+land "$FX7b"
+echo "# local" >> "$FX7b/ns/scripts/loop_state.sh"
+RC=0; OUT_Y7b="$(ns_drain "$FX7b")" || RC=$?
+assert_eq "$(head_of "$FX7b/ns")" "$(head_of "$FX7b/origin.git" main)" "(Y7) untouched edit → clone still fast-forwarded"
+assert_eq "$(tail -n 1 "$FX7b/ns/scripts/loop_state.sh")" "# local" "(Y7) untouched edit carried across the pull"
+assert_contains "$OUT_Y7b" "dispatch: #62" "(Y7) untouched edit → pass dispatches"
+FX7c="$WORK/fx-y7c"; mk_fixture "$FX7c"; mkdir -p "$FX7c/run"
+git -C "$FX7c/ns" remote set-url origin "$FX7c/missing.git"
+RC=0; OUT_Y7c="$(ns_drain "$FX7c")" || RC=$?
+assert_contains "$OUT_Y7c" "sync: REFUSED" "(Y7) failing fetch is refused"
+assert_not_contains "$OUT_Y7c" "dispatch:" "(Y7) no dispatch when fetch fails"
+
 # =============================================================================
 # Slice L — loop (persistent poll + kill switch)
 # =============================================================================

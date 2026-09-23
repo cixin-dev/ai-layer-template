@@ -118,9 +118,11 @@ exec 9>&-; rm -f "$LOCK"
 `origin/main`, queue-independent, and finishes the pass on the pulled code — a merged fix
 reaches the Night Shift within one tick. (Before this, only a PIV drive pulled; an idle queue
 froze the clone two months at `6a8cc5c` — retroactive: night-shift-clone-auto-pull.) A clone
-that cannot fast-forward — off `main`, dirty, diverged, fetch failing — is **refused**: nothing
-dispatches, the log carries `sync: REFUSED — <reason>` every pass, and one `Night Shift sync
-refused` push fires per streak. Fix the clone by hand; the next tick recovers on its own. The
+that cannot fast-forward — off `main`, diverged, a local edit the pull would overwrite, fetch
+failing — is **refused**: nothing dispatches, the log carries `sync: REFUSED — <reason>` every
+pass, and one `Night Shift sync refused` push fires per streak. Dirty alone is **not** refused:
+edits the pull doesn't touch, and untracked files (plan drafts), ride along (plain ff-only, like a
+hand `git pull --ff-only`). Fix the clone by hand; the next tick recovers on its own. The
 kill switch suspends the sync too — a stopped clone is yours to work in. Covered by
 `scripts/night_shift_loop.test.sh` Slice Y (real-git fixture, known-bad → known-good).
 
