@@ -143,9 +143,9 @@ make_repo "$REPO_J"
 git -C "$REPO_J" checkout -q -b prd/some-feature
 mkdir -p "$REPO_J/.agents/prds" "$REPO_J/docs/adr"
 echo "# prd" > "$REPO_J/.agents/prds/some-feature.prd.md"
-echo "# glossary" > "$REPO_J/CONTEXT.md"
+echo "# glossary" > "$REPO_J/GLOSSARY.md"
 echo "# adr" > "$REPO_J/docs/adr/0001-some-decision.md"
-git -C "$REPO_J" add .agents/prds/ CONTEXT.md docs/adr/
+git -C "$REPO_J" add .agents/prds/ GLOSSARY.md docs/adr/
 git -C "$REPO_J" commit -q -m "docs(prd): add PRD, glossary, ADR"
 output_j="$(cd "$REPO_J" && bash "$CHECK" 2>&1)"
 assert_skipped "$output_j" "test(j): prd/* branch skips"
@@ -164,12 +164,12 @@ git -C "$REPO_K" commit -q -m "docs(prd): prd plus harness fix"
 output_k="$(cd "$REPO_K" && bash "$CHECK" 2>&1)"
 assert_skipped "$output_k" "test(k): prd/* exempt by prefix despite machinery edit"
 
-# --- Test (l): align/* branch (CONTEXT.md only) → skips ---
+# --- Test (l): align/* branch (GLOSSARY.md only) → skips ---
 REPO_L="$TMPDIR_ROOT/repo_l"
 make_repo "$REPO_L"
 git -C "$REPO_L" checkout -q -b align/glossary
-echo "# glossary" > "$REPO_L/CONTEXT.md"
-git -C "$REPO_L" add CONTEXT.md
+echo "# glossary" > "$REPO_L/GLOSSARY.md"
+git -C "$REPO_L" add GLOSSARY.md
 git -C "$REPO_L" commit -q -m "docs(context): resolve terms"
 output_l="$(cd "$REPO_L" && bash "$CHECK" 2>&1)"
 assert_skipped "$output_l" "test(l): align/* branch skips"

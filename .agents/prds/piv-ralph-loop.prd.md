@@ -207,7 +207,7 @@ is ready, or a task is stuck.
   worktree); this PRD fixes only the ownership behavior.
 
 - **Vocabulary reconciliation is a blocking predecessor (gate-0).** A dedicated
-  `grill-with-docs` session must reconcile CONTEXT.md (the "polling → interrupt" framing
+  `grill-with-docs` session must reconcile GLOSSARY.md (the "polling → interrupt" framing
   becomes "interrupt for the two human-wanted events; poll as the loop's scheduling /
   safety-net mechanism"), clarify ADR-0010 (a mechanical trigger may *schedule* a phase but
   never *judge* semantic completion — that judgment stays inside the phase, carried by the
@@ -257,7 +257,7 @@ is ready, or a task is stuck.
   decision **— now recorded in ADR-0026**.
 - v1 concurrency > 1. Serial first; N is a later graduation.
 - Dependency-aware scheduling. v1 assumes independently-grabbable, `ready`-labelled Issues.
-- Editing CONTEXT.md / ADRs. That is the gate-0 `grill-with-docs` session's job, in its own
+- Editing GLOSSARY.md / ADRs. That is the gate-0 `grill-with-docs` session's job, in its own
   PR.
 - Auto-generating Issues. The human writes the Issue; the loop starts at `/plan`.
 

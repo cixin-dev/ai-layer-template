@@ -18,7 +18,7 @@ Denies:
     git push stays merely on the `ask` checkpoint; only these two forms are denied.
 
     Known string-layer limits (out of scope BY DESIGN — a string matcher cannot see a
-    value that is not literal in the command, the same class CONTEXT.md names *opaque
+    value that is not literal in the command, the same class GLOSSARY.md names *opaque
     code execution*; all three are backstopped by the standing `git push: ask`
     checkpoint, ADR-0020):
       - the implicit bare `git push` (upstream target is not in the string);

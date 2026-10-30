@@ -50,28 +50,28 @@ the user to run `/to-tickets`**.
 
 > **Naming boundary.** `to-spec` and `to-tickets` are the upstream (Matt Pocock v1.1)
 > invocation names; this project keeps its own glossary. The artifacts stay a **PRD** and
-> **Issues** — never "spec" or "ticket" (CONTEXT.md; ADR-0008, ADR-0028). Two behaviours
+> **Issues** — never "spec" or "ticket" (GLOSSARY.md; ADR-0008, ADR-0028). Two behaviours
 > follow our concepts, not the skills' defaults: `to-spec` writes the PRD to a file at
 > `.agents/prds/{name}.prd.md` (not to a tracker), and `to-tickets`' unit is an **Issue** —
 > it already converges, publishing real GitHub Issues labelled `ready-for-agent`.
 
 ## Alignment checkpoint
 
-During the brain dump, watch for domain terms that aren't yet in `CONTEXT.md`.
+During the brain dump, watch for domain terms that aren't yet in `GLOSSARY.md`.
 
 **Inline capture** — If the term is lone, additive, and self-contained (no existing entry
 contradicts it; it can be defined without defining or renaming anything else):
 1. Before writing, **narrate in Traditional Chinese**: describe the term, its meaning, and
-   why it belongs — wait for the user to confirm before touching `CONTEXT.md`.
-2. Add the term to `CONTEXT.md` and continue.
+   why it belongs — wait for the user to confirm before touching `GLOSSARY.md`.
+2. Add the term to `GLOSSARY.md` and continue.
 
 **Escalate** — If **either** (a) the term would contradict or force a rewrite of an
-existing `CONTEXT.md` entry, **or** (b) two or more new terms are interdependent (defining
+existing `GLOSSARY.md` entry, **or** (b) two or more new terms are interdependent (defining
 one forces defining or renaming the others), do **not** patch inline. Instead:
 1. Name the conflict or coupling to the user.
 2. State this contract in the conversation, then **tell the user to run `/handoff`** (it is
    user-invoked; the handoff must carry the contract): the `grill-with-docs` session must
-   narrate changes to the user in Traditional Chinese, and any resulting `CONTEXT.md` or ADR
+   narrate changes to the user in Traditional Chinese, and any resulting `GLOSSARY.md` or ADR
    edits must travel in a dedicated PR whose body contains a Traditional Chinese
    `## 變更說明` section naming which terms changed and why.
 3. Tell the user to open a fresh session and run `/grill-with-docs` to resolve the
