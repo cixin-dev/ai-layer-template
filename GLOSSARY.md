@@ -4,10 +4,10 @@ The shared glossary for this project. Every term here means one thing, named one
 
 This repository is the **single source of project-agnostic harness machinery** — synced
 to user scope (`~/.claude/`), not copied into each project. Each downstream repo keeps its own
-`CONTEXT.md` versioned with its code; that file is where the repo's domain terms (e.g.
+`GLOSSARY.md` versioned with its code; that file is where the repo's domain terms (e.g.
 `Session`, `Turn`, `Model Request`) accumulate as the project grows. This copy captures the
 machinery's own Ubiquitous Language — the terms that name the harness concepts themselves.
-The filename is always `CONTEXT.md`.
+The filename is always `GLOSSARY.md` (ADRs before ADR-0031 call it `CONTEXT.md`).
 
 ## Language
 
@@ -48,13 +48,13 @@ from the per-Issue work of Phase 2.
 
 **Ubiquitous Language**:
 The single language shared by domain expert, developer, and code to describe the system.
-Establishing it is the goal of Alignment; it is persisted in `CONTEXT.md`. Source: Eric
+Establishing it is the goal of Alignment; it is persisted in `GLOSSARY.md`. Source: Eric
 Evans (Domain-Driven Design), via Matt Pocock.
-_Avoid_: jargon, glossary (the *concept* is Ubiquitous Language; `CONTEXT.md` is the file
-it lives in)
+_Avoid_: jargon, glossary (the *concept* is Ubiquitous Language; "glossary" names only the
+file it lives in, `GLOSSARY.md`)
 
 **grill-with-docs**:
-A relentless interview session that reads `CONTEXT.md` and the ADRs, challenges fuzzy or
+A relentless interview session that reads `GLOSSARY.md` and the ADRs, challenges fuzzy or
 conflicting terms as they come up, and updates those documents inline as decisions
 crystallise. The method for reaching Ubiquitous Language when a codebase exists. Term:
 Matt Pocock.
@@ -66,14 +66,14 @@ A short markdown note recording a decision that is both hard to reverse and surp
 without context — *why one decision* was made the way it was. Lives in `docs/adr/`. The ADRs
 form a cumulative, append-only history: an ADR is superseded by a later one, never
 overwritten — unlike a PRD, which states *what* to build and is replaced as intent changes.
-Together with `CONTEXT.md` it is the agent's durable memory across sessions. Term: widely
+Together with `GLOSSARY.md` it is the agent's durable memory across sessions. Term: widely
 used; adopted via Matt Pocock.
 _Avoid_: design doc, RFC, PRD
 
 **Strategic Planning**:
 The project-level planning stage: brain dump → clarifying questions → PRD → Issues. Runs
 **once per feature** and *outputs* the Issues that Phase 2 consumes. Its brain-dump step
-carries an **Alignment checkpoint**: a lone, additive new term is captured into `CONTEXT.md`
+carries an **Alignment checkpoint**: a lone, additive new term is captured into `GLOSSARY.md`
 inline, and only a *conflicting or coupled* term-knot escalates — via a handoff to a fresh
 session — to a full grill-with-docs Alignment pass. Distinct from PIV's Plan step, which is
 Issue-level and runs once per Issue. Term: Cole Medin.

@@ -157,7 +157,7 @@ On PASS:
    section in Traditional Chinese — what changed and why, in the author's language. This is
    the author's comprehension checkpoint at the human gate, enforced by the author's PR review
    here, **not** by CI (see ADR-0022; a CI gate was retracted as over-design and is
-   unenforceable on a free-private repo). Canonical-doc PRs (`CONTEXT.md`, `docs/adr/`) are
+   unenforceable on a free-private repo). Canonical-doc PRs (`GLOSSARY.md`, `docs/adr/`) are
    the strongest case — those stay English for zero-drift, so the TC summary is the author's
    only language bridge — but the floor applies to every PR, not just canonical-doc ones.
 3. **Share the PR URL** with reviewers.
