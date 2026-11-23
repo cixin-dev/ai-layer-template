@@ -10,28 +10,49 @@ Tear down a feature branch after its PR has been merged. Runs from the **main re
 
 ---
 
+## Phase 0 — Detect the forge
+
+Read the host from `git remote get-url origin` and pick the CLI (substring match, so SSH
+host aliases like `github-foo` / `gitlab-foo` and self-hosted `gitlab.example.com` both work):
+
+| Host contains | Forge | CLI | Review unit |
+|---------------|-------|-----|-------------|
+| `github` | GitHub | `gh` | PR |
+| `gitlab` | GitLab | `glab` | MR |
+| neither | — | — | STOP — "Can't tell the forge from origin `{url}`. Tell me: GitHub or GitLab?" |
+
+Phases 1–2 use the forge's command below; "PR" in the rest of this file means MR on GitLab.
+Phase 3 onward is plain `git` and forge-agnostic.
+
 ## Phase 1 — Resolve the branch
 
 Determine the branch name from `$ARGUMENTS`:
 
 | Input | Action |
 |-------|--------|
-| PR number (`#N` or bare integer) | `gh pr view {N} --json headRefName --jq .headRefName` |
+| PR/MR number (`#N`, `!N`, or bare integer) | GitHub: `gh pr view {N} --json headRefName --jq .headRefName`<br>GitLab: `glab mr view {N} -F json \| jq -r .source_branch` |
 | Branch name | Use it directly |
 | Blank | `git branch --show-current` (works from inside the feature worktree too) |
 
 ## Phase 2 — Hard gate: PR must be MERGED
 
-Run `gh pr list --head {branch} --json state,number,url,headRefOid --limit 1 --state all`
-to find the PR. Keep `headRefOid` — it is the exact commit that was merged, and Phase 3's
+Find the PR/MR for the branch:
+
+- GitHub: `gh pr list --head {branch} --json state,number,url,headRefOid --limit 1 --state all`
+- GitLab: `glab mr list --source-branch {branch} --all -F json --per-page 1`
+  → read `.[0]`: `state`, `iid` (the number), `web_url`, `sha`. No match prints `[]`
+  (rc 0, not an error), so test for an empty list, not the exit code.
+
+Keep `headRefOid` (GitLab: `sha`) — it is the exact commit that was merged, and Phase 3's
 rescue check needs it.
 
-| State | Action |
+| State (GitHub / GitLab) | Action |
 |-------|--------|
-| No PR found | STOP — "No PR found for branch {branch}. Nothing to clean up." |
-| OPEN | STOP — "PR #{N} is still OPEN. Get it reviewed and merged first." |
-| CLOSED (not merged) | STOP — "PR #{N} was closed without merging. If you want to discard the branch and worktree anyway, re-run as `/clean-worktree {branch} --discard`." Skip this check when `--discard` is present in `$ARGUMENTS`. |
-| MERGED | Proceed (remember `{headRefOid}`) |
+| No PR found / `[]` | STOP — "No PR found for branch {branch}. Nothing to clean up." |
+| `OPEN` / `opened` | STOP — "PR #{N} is still OPEN. Get it reviewed and merged first." |
+| `CLOSED` / `closed` (not merged) | STOP — "PR #{N} was closed without merging. If you want to discard the branch and worktree anyway, re-run as `/clean-worktree {branch} --discard`." Skip this check when `--discard` is present in `$ARGUMENTS`. |
+| `MERGED` / `merged` | Proceed (remember `{headRefOid}`) |
+| any other (e.g. GitLab `locked`) | STOP — report the raw state; do not guess. |
 
 ## Phase 3 — Cleanup sequence
 
@@ -89,8 +110,9 @@ the main repo as the working directory.
    create a merge commit on the feature branch; `-d` would fail with "not fully merged".
 5. `git worktree prune` — clean up any stale worktree references.
 6. `git push origin --delete {branch} 2>/dev/null || echo "remote branch already gone — continuing"`
-   — the `|| echo` absorbs the expected "remote ref does not exist" when GitHub already
-   deleted the branch on merge (`delete_branch_on_merge`, the common case here), so the step
+   — the `|| echo` absorbs the expected "remote ref does not exist" when the forge already
+   deleted the branch on merge (GitHub `delete_branch_on_merge` / GitLab "Delete source
+   branch", the common case), so the step
    returns `0` instead of erroring or breaking a `&&`-chained run. Keep the resilience **in the
    command**, not as a prose caveat on a bare `git push --delete` — a bare delete surfaces the
    error and, when chained, aborts step 7.
@@ -104,4 +126,4 @@ Print a brief summary:
 Done. main is up to date. Worktree removed. Branch {branch} deleted locally and remotely.
 ```
 
-Never touch Issue state — the PR body's `Closes #N` handles it at merge.
+Never touch Issue state — the PR/MR body's `Closes #N` handles it at merge (both forges).
